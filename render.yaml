@@ -3,19 +3,31 @@ services:
     name: tapnod-demo
     runtime: node
     rootDir: server
-    buildCommand: "echo no build needed"
+    buildCommand: npm install --omit=dev
     startCommand: node server.js
     plan: free
-    healthCheckPath: /api/health
+    healthCheckPath: /healthz
     envVars:
+      # Customers, fingerprints, linked cards and notification subscriptions live here.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tapnod-db
+          property: connectionString
       - key: TOKEN_SECRET
         value: tapnod-demo-secret
-      # Keeps phone notifications working across restarts. Render makes a random value once.
+      # Signs sign-in sessions and keeps notification keys stable. Render makes a random value once.
       - key: VAPID_SECRET
         generateValue: true
-      # Demo shortcut: any unknown card is linked to Amaka on first use. Set to empty to disable.
+      # Demo shortcut: an unknown card is linked to the most recent sign-up. Set to empty to disable.
       - key: DEMO_AUTO_LINK
-        value: cus_amaka
+        value: latest
       # Nigerian voices. Paste your key from yarngpt.ai in the Render dashboard.
       - key: YARNGPT_API_KEY
         sync: false
+
+databases:
+  # Free Render Postgres: 1 GB, expires 30 days after creation (then a 14-day grace period).
+  - name: tapnod-db
+    plan: free
+    databaseName: tapnod
+    user: tapnod
