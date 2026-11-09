@@ -16,7 +16,8 @@ class SettingsStore(context: Context) {
         merchantName = prefs.getString("merchant_name", "Bisi Ventures") ?: "Bisi Ventures",
         merchantId = prefs.getString("merchant_id", "BISI-001") ?: "BISI-001",
         tokenSecret = prefs.getString("token_secret", "tapnod-demo-secret") ?: "tapnod-demo-secret",
-        voice = prefs.getBoolean("voice", true)
+        voice = prefs.getBoolean("voice", true),
+        acceptAnyTap = prefs.getBoolean("accept_any_tap", true)
     )
 
     var voiceName: String
@@ -35,6 +36,7 @@ class SettingsStore(context: Context) {
             .putString("merchant_id", s.merchantId.trim())
             .putString("token_secret", s.tokenSecret)
             .putBoolean("voice", s.voice)
+            .putBoolean("accept_any_tap", s.acceptAnyTap)
             .apply()
     }
 }

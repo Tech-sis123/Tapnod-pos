@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B0B0B">
+<title>Tapnod</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#0B0B0B; --paper:#F2F0EA; --lime:#D4FF3A; --mute:#6B6A66; --line:#D9D6CE; --red:#FF4D3D; --green:#2BD46B; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: Inter, system-ui, -apple-system, sans-serif; background: var(--paper); color: var(--ink);
+    padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 10px; -webkit-tap-highlight-color: transparent;
+  }
+  .tile { border-radius: 22px; padding: 20px; background: #fff; }
+  .ink { background: var(--ink); color: #fff; }
+  .lime { background: var(--lime); color: var(--ink); }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+  .ink .eyebrow { color: var(--lime); }
+  .big { font-size: clamp(44px, 14vw, 72px); font-weight: 800; letter-spacing: -.045em; line-height: .95; }
+  .mid { font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1.05; }
+  .muted { color: var(--mute); font-size: 15px; line-height: 1.4; }
+  .ink .muted { color: #A9A7A0; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; min-height: 120px; }
+  .logo { font-size: 40px; font-weight: 800; letter-spacing: -.05em; }
+  .logo span { color: var(--lime); }
+  .screen { display: none; flex: 1; flex-direction: column; gap: 10px; }
+  .screen.on { display: flex; }
+  .grow { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
+  button {
+    font: inherit; border: 0; border-radius: 18px; width: 100%; padding: 22px; cursor: pointer;
+    font-size: 19px; font-weight: 800; letter-spacing: -.01em;
+  }
+  button:active { transform: scale(.985); }
+  .btn-lime { background: var(--lime); color: var(--ink); }
+  .btn-ink { background: var(--ink); color: #fff; }
+  .btn-ghost { background: transparent; color: var(--ink); border: 2px solid var(--ink); }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+  .pulse { width: 18px; height: 18px; border-radius: 50%; background: var(--lime); position: relative; }
+  .pulse::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--lime);
+    animation: ring 1.6s ease-out infinite;
+  }
+  @keyframes ring { from { transform: scale(1); opacity: .8 } to { transform: scale(3.2); opacity: 0 } }
+  .bar { height: 6px; background: #2A2A2A; border-radius: 6px; overflow: hidden; margin-top: 16px; }
+  .bar i { display: block; height: 100%; background: var(--lime); width: 100%; transition: width 1s linear; }
+  .result-approved { background: var(--green); }
+  .result-declined, .result-expired, .result-cancelled { background: var(--red); color: #fff; }
+  .tag { display: inline-block; padding: 6px 10px; border-radius: 999px; background: var(--paper); font-size: 13px; font-weight: 600; }
+  .ink .tag { background: #222; color: #fff; }
+  .note { font-size: 13px; color: var(--mute); text-align: center; padding: 4px 8px; }
+  @media (prefers-reduced-motion: reduce) { .pulse::after { animation: none; } }
+</style>
+</head>
+<body>
+
+<header class="tile ink">
+  <div>
+    <div class="eyebrow">Tapnod · Customer</div>
+    <div class="logo">tapnod<span>.</span></div>
+  </div>
+  <div class="tag" id="who">…</div>
+</header>
+
+<!-- 1. Start: one tap unlocks voice and sets up the fingerprint -->
+<section class="screen on" id="s-start">
+  <div class="tile grow">
+    <div class="eyebrow">Welcome</div>
+    <div class="mid" style="margin-top:10px" id="hello">Hi.</div>
+    <p class="muted" style="margin-top:10px">Tap start once. Tapnod will read every payment out loud, and you approve with your fingerprint.</p>
+  </div>
+  <button class="btn-ink" id="start">Start</button>
+  <p class="note" id="start-note"></p>
+</section>
+
+<!-- 2. Waiting for a payment -->
+<section class="screen" id="s-idle">
+  <div class="tile ink grow">
+    <div style="display:flex;align-items:center;gap:14px"><div class="pulse"></div><div class="eyebrow">Live</div></div>
+    <div class="big" style="margin-top:22px">Waiting for a payment</div>
+    <p class="muted" style="margin-top:12px">Keep this page open. When a shop charges your card, it shows up here and Tapnod reads it out.</p>
+  </div>
+  <div class="tile"><p class="muted" id="fp-status">Fingerprint ready.</p></div>
+</section>
+
+<!-- 3. A payment needs approval -->
+<section class="screen" id="s-pending" aria-live="assertive">
+  <div class="tile ink">
+    <div class="eyebrow" id="p-merchant">Merchant</div>
+    <div class="big" style="margin-top:14px" id="p-amount">₦0</div>
+    <p class="muted" style="margin-top:10px" id="p-card">Card</p>
+    <div class="bar"><i id="p-bar"></i></div>
+    <p class="muted" style="margin-top:8px" id="p-left"></p>
+  </div>
+  <div class="grow"></div>
+  <button class="btn-lime" id="approve">Approve with fingerprint</button>
+  <div class="row">
+    <button class="btn-ghost" id="repeat">Repeat</button>
+    <button class="btn-ghost" id="decline">Decline</button>
+  </div>
+</section>
+
+<!-- 4. Result -->
+<section class="screen" id="s-result" aria-live="assertive">
+  <div class="tile grow" id="r-tile">
+    <div class="eyebrow" id="r-eyebrow">Result</div>
+    <div class="big" style="margin-top:14px" id="r-title">Approved</div>
+    <p style="margin-top:12px;font-size:16px" id="r-body"></p>
+  </div>
+  <button class="btn-ink" id="done">Done</button>
+</section>
+
+<script>
+const params = new URLSearchParams(location.search);
+const CUSTOMER = params.get('c') || 'cus_amaka';
+const FP_KEY = 'tapnod_fp_' + CUSTOMER;
+
+let customerName = 'there';
+let current = null;        // request currently on screen
+let shownResultFor = null; // request id whose result we already showed
+let started = false;
+
+const $ = (id) => document.getElementById(id);
+function show(id) {
+  document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.id === id));
+}
+
+/* ---------- money in words, so the voice says "fifteen thousand naira" ---------- */
+const ONES = ['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve',
+  'thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+const TENS = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+function under1000(n) {
+  const parts = [];
+  if (n >= 100) { parts.push(ONES[Math.floor(n / 100)] + ' hundred'); n %= 100; if (n) parts.push('and'); }
+  if (n >= 20) { parts.push(TENS[Math.floor(n / 10)] + (n % 10 ? '-' + ONES[n % 10] : '')); }
+  else if (n > 0 || !parts.length) parts.push(ONES[n]);
+  return parts.join(' ');
+}
+function words(n) {
+  if (n === 0) return 'zero';
+  const scales = [[1e9, 'billion'], [1e6, 'million'], [1e3, 'thousand']];
+  const out = [];
+  for (const [v, name] of scales) {
+    if (n >= v) { out.push(under1000(Math.floor(n / v)) + ' ' + name); n %= v; }
+  }
+  if (n) out.push((out.length && n < 100 ? 'and ' : '') + under1000(n));
+  return out.join(' ');
+}
+function moneyWords(kobo) {
+  const naira = Math.floor(kobo / 100), k = kobo % 100;
+  let s = words(naira) + ' naira';
+  if (k) s += ' ' + words(k) + ' kobo';
+  return s;
+}
+function moneyText(kobo) {
+  return '₦' + (kobo / 100).toLocaleString('en-NG', { minimumFractionDigits: kobo % 100 ? 2 : 0 });
+}
+
+/* ---------- voice ---------- */
+let voice = null;
+function pickVoice() {
+  const vs = speechSynthesis.getVoices();
+  voice = vs.find((v) => v.lang === 'en-NG') || vs.find((v) => v.lang === 'en-GB') ||
+          vs.find((v) => v.lang.startsWith('en')) || null;
+}
+if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+function say(text) {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  if (voice) u.voice = voice;
+  u.rate = 0.95;
+  speechSynthesis.speak(u);
+}
+function buzz(pattern) { if (navigator.vibrate) navigator.vibrate(pattern); }
+
+/* ---------- fingerprint (WebAuthn passkey on this phone) ---------- */
+const b64 = {
+  enc: (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+  dec: (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)),
+};
+const rand = (n) => crypto.getRandomValues(new Uint8Array(n));
+let fpAvailable = false;
+
+async function fingerprintSupported() {
+  try {
+    return !!(window.PublicKeyCredential &&
+      await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
+  } catch { return false; }
+}
+
+async function registerFingerprint() {
+  const cred = await navigator.credentials.create({ publicKey: {
+    challenge: rand(32),
+    rp: { name: 'Tapnod' },
+    user: { id: rand(16), name: CUSTOMER, displayName: customerName },
+    pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+    authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
+    timeout: 60000,
+  }});
+  localStorage.setItem(FP_KEY, b64.enc(cred.rawId));
+}
+
+// Resolves true only if the phone confirmed the owner's fingerprint (or screen lock).
+async function checkFingerprint() {
+  const id = localStorage.getItem(FP_KEY);
+  if (!fpAvailable || !id) return confirm('Fingerprint is not available in this browser. Approve this payment?');
+  try {
+    await navigator.credentials.get({ publicKey: {
+      challenge: rand(32),
+      allowCredentials: [{ type: 'public-key', id: b64.dec(id) }],
+      userVerification: 'required',
+      timeout: 60000,
+    }});
+    return true;
+  } catch { return false; }
+}
+
+/* ---------- start ---------- */
+async function loadCustomer() {
+  try {
+    const r = await fetch('/api/customer/' + CUSTOMER);
+    if (r.ok) customerName = (await r.json()).name;
+  } catch {}
+  const first = customerName.split(' ')[0];
+  $('who').textContent = customerName;
+  $('hello').textContent = 'Hi ' + first + '.';
+}
+
+$('start').onclick = async () => {
+  // This tap is the "user gesture" browsers need before they allow speech.
+  say('Tapnod is on. I will read your payments to you.');
+  fpAvailable = await fingerprintSupported();
+  if (fpAvailable && !localStorage.getItem(FP_KEY)) {
+    $('start-note').textContent = 'Setting up your fingerprint…';
+    try { await registerFingerprint(); }
+    catch { fpAvailable = false; }
+  }
+  $('fp-status').textContent = fpAvailable && localStorage.getItem(FP_KEY)
+    ? 'Fingerprint ready. Payments need your fingerprint.'
+    : 'Fingerprint not available here, so you will confirm on screen. Use Chrome on Android over https.';
+  started = true;
+  show('s-idle');
+};
+
+/* ---------- live updates (polls once a second) ---------- */
+async function poll() {
+  if (!started) return;
+  let req = null;
+  try {
+    const r = await fetch('/api/customer/' + CUSTOMER + '/latest', { cache: 'no-store' });
+    req = (await r.json()).request;
+  } catch { return; } // offline for a moment, try again next tick
+  if (!req) return;
+
+  if (req.status === 'pending') {
+    if (!current || current.request_id !== req.request_id) showPending(req);
+    else current = req;
+    updateCountdown();
+    return;
+  }
+  // Finished: show the result once (approved from here, or cancelled/expired on the POS side).
+  if (current && current.request_id === req.request_id && shownResultFor !== req.request_id) {
+    showResult(req);
+  }
+}
+
+function showPending(req) {
+  current = req;
+  $('p-merchant').textContent = req.merchant_name;
+  $('p-amount').textContent = moneyText(req.amount_kobo);
+  $('p-card').textContent = (req.card_scheme || 'Card') + ' ending ' + (req.card_last4 || '····');
+  show('s-pending');
+  buzz([200, 100, 200]);
+  announce(req);
+}
+
+function announce(req) {
+  say(req.merchant_name + ' is asking you to pay ' + moneyWords(req.amount_kobo) +
+      '. Touch Approve, then your fingerprint, to pay. Or touch Decline.');
+}
+
+function updateCountdown() {
+  if (!current) return;
+  const left = Math.max(0, current.expires_at_ms - Date.now());
+  $('p-bar').style.width = (left / 120000 * 100) + '%';
+  $('p-left').textContent = Math.ceil(left / 1000) + ' seconds left';
+}
+
+async function answer(action) {
+  if (!current) return;
+  const id = current.request_id;
+  try {
+    const r = await fetch('/api/customer/requests/' + id + '/' + action, { method: 'POST' });
+    const body = await r.json();
+    showResult(body.request || { ...current, status: action === 'approve' ? 'approved' : 'declined' });
+  } catch {
+    say('Network problem. Try again.');
+  }
+}
+
+$('approve').onclick = async () => {
+  $('approve').disabled = true;
+  const ok = await checkFingerprint();
+  $('approve').disabled = false;
+  if (ok) answer('approve');
+  else say('Fingerprint not confirmed. Try again, or touch Decline.');
+};
+$('decline').onclick = () => answer('decline');
+$('repeat').onclick = () => current && announce(current);
+
+function showResult(req) {
+  shownResultFor = req.request_id;
+  const t = $('r-tile');
+  t.className = 'tile grow result-' + req.status;
+  const amount = moneyText(req.amount_kobo);
+  const texts = {
+    approved: ['Paid', 'Approved', amount + ' to ' + req.merchant_name + '. Reference ' + req.reference + '.',
+      'Payment approved. You paid ' + moneyWords(req.amount_kobo) + ' to ' + req.merchant_name + '.'],
+    declined: ['Stopped', 'Declined', 'You declined ' + amount + ' to ' + req.merchant_name + '. No money left your account.',
+      'Payment declined. No money left your account.'],
+    expired: ['Timed out', 'Expired', 'The payment to ' + req.merchant_name + ' timed out. No money left your account.',
+      'The payment timed out. No money left your account.'],
+    cancelled: ['Cancelled', 'Cancelled', req.merchant_name + ' cancelled this payment. No money left your account.',
+      'The shop cancelled this payment.'],
+  }[req.status] || ['Update', req.status, '', ''];
+  $('r-eyebrow').textContent = texts[0];
+  $('r-title').textContent = texts[1];
+  $('r-body').textContent = texts[2];
+  show('s-result');
+  buzz(req.status === 'approved' ? [80] : [300]);
+  say(texts[3]);
+}
+
+$('done').onclick = () => { current = null; show('s-idle'); };
+
+loadCustomer();
+setInterval(poll, 1000);
+setInterval(updateCountdown, 1000);
+</script>
+</body>
+</html>

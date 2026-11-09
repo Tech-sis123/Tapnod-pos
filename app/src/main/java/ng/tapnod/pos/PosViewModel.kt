@@ -57,6 +57,9 @@ sealed interface Screen {
     data object Settings : Screen
 }
 
+/** Test card used by "Simulate tap" and "Accept any tap". Not a real card. */
+const val DEMO_CARD_NUMBER = "5399000000004821"
+
 data class UiState(
     val screen: Screen = Screen.Amount,
     val amountDigits: String = "",
@@ -168,8 +171,11 @@ class PosViewModel(app: Application) : AndroidViewModel(app) {
     /** Simulator-only: pretend a test card was tapped. */
     fun simulateTap() {
         val mode = beginCardRead() ?: return
-        onCardNumber("5399000000004821", mode)
+        onCardNumber(DEMO_CARD_NUMBER, mode)
     }
+
+    /** A card touched the phone but its number couldn't be read: use the demo card instead. */
+    fun onAnyTap(mode: TapMode) = onCardNumber(DEMO_CARD_NUMBER, mode)
 
     fun cancelTap() {
         _state.update { it.copy(linkCustomer = null, pendingLinkCard = null) }
