@@ -16,7 +16,8 @@ import java.util.concurrent.TimeUnit
 /** Everything the POS needs from Tapnod. See README.md for the HTTP contract. */
 interface TapnodApi {
     suspend fun health(): Boolean
-    suspend fun createRequest(amountKobo: Long, card: CardInfo): CreateResult
+    /** [customerId] set = the agent picked the customer on the POS instead of reading a card. */
+    suspend fun createRequest(amountKobo: Long, card: CardInfo, customerId: String? = null): CreateResult
     suspend fun status(requestId: String): StatusResult
     suspend fun cancel(requestId: String)
     suspend fun customers(): List<Customer>
@@ -71,16 +72,16 @@ class HttpTapnodApi(private val settings: PosSettings) : TapnodApi {
         false
     }
 
-    override suspend fun createRequest(amountKobo: Long, card: CardInfo): CreateResult {
+    override suspend fun createRequest(amountKobo: Long, card: CardInfo, customerId: String?): CreateResult {
         val body = JSONObject()
             .put("amount_kobo", amountKobo)
             .put("currency", "NGN")
             .put("merchant_id", settings.merchantId)
             .put("merchant_name", settings.merchantName)
             .put("terminal_id", settings.terminalId)
-            .put("card_token", card.token)
             .put("card_last4", card.last4)
             .put("card_scheme", card.scheme)
+        if (customerId != null) body.put("customer_id", customerId) else body.put("card_token", card.token)
         val (code, text) = call("POST", "/api/pos/requests", body)
         if (code == 404) return CreateResult.NotLinked
         if (code !in 200..299) throw ApiException(errorMessage(text, code))
@@ -160,9 +161,9 @@ class SimulatorApi(context: Context, private val settings: PosSettings) : Tapnod
 
     override suspend fun health(): Boolean = true
 
-    override suspend fun createRequest(amountKobo: Long, card: CardInfo): CreateResult {
+    override suspend fun createRequest(amountKobo: Long, card: CardInfo, customerId: String?): CreateResult {
         kotlinx.coroutines.delay(450)
-        val customerId = prefs.getString("card_${card.token}", null) ?: return CreateResult.NotLinked
+        val customerId = customerId ?: prefs.getString("card_${card.token}", null) ?: return CreateResult.NotLinked
         val name = demoCustomers.firstOrNull { it.id == customerId }?.name ?: "Customer"
         val id = "req_" + UUID.randomUUID().toString().take(8)
         pending[id] = Pending(System.currentTimeMillis(), name)
