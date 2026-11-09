@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F4F4F0">
+<title>Tapnod</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/tapnod.css">
+<script src="/i18n.js"></script>
+<style>
+  body { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; padding: 0 16px max(16px, env(safe-area-inset-bottom)); }
+  header { position: sticky; top: 0; z-index: 5; background: var(--paper); display: flex; justify-content: space-between; align-items: center; height: 64px; border-bottom: 1px solid var(--line); }
+  header .right { display: flex; gap: 14px; align-items: center; }
+  header button { font: inherit; font-size: 14px; font-weight: 600; background: none; border: 0; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 8px 0; }
+  .screen { display: none; flex: 1; flex-direction: column; gap: 12px; padding-top: 20px; }
+  .screen.on { display: flex; }
+  .spacer { flex: 1; }
+  .stack { display: grid; gap: 12px; }
+  .form { display: grid; gap: 16px; }
+  .center { text-align: center; }
+  .idcard { display: grid; gap: 18px; }
+  .idcard .num { font-size: 26px; font-weight: 700; letter-spacing: .04em; }
+  .tile-stat { display: grid; gap: 8px; padding: 16px; }
+  .tile-stat .t { font-size: 15px; font-weight: 600; }
+  .tile-stat .pill { justify-self: start; }
+  .bar { height: 3px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--ink); width: 100%; transition: width 1s linear; }
+  .r-icon { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; font-size: 34px; font-weight: 700; color: #fff; margin: 32px auto 8px; background: var(--accent); }
+  .r-icon.bad { background: var(--red); }
+  .soundbar { position: fixed; left: 50%; transform: translateX(-50%); width: calc(100% - 32px); max-width: 448px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 9; display: none; box-shadow: 0 12px 30px rgba(0,0,0,.18); }
+  .soundbar.on { display: flex; }
+  .hidden { display: none !important; }
+  input[type=range] { width: 100%; accent-color: var(--ink); }
+  .section-title { margin: 12px 4px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <a class="logo" href="/">tapnod</a>
+  <div class="right">
+    <span class="small hidden" id="who"></span>
+    <button id="open-settings" class="hidden">Settings</button>
+  </div>
+</header>
+
+<!-- ============ SIGNED OUT ============ -->
+
+<section class="screen" id="s-welcome">
+  <div class="stack" style="padding-top:12px">
+    <div class="eyebrow">Welcome</div>
+    <h1 class="h2">Hear every payment. Approve with your finger.</h1>
+    <p class="body">Sign in to see payments waiting for you.</p>
+  </div>
+  <div class="spacer"></div>
+  <p class="error" id="welcome-err" role="alert"></p>
+  <button class="btn btn-primary" id="finger-signin">Sign in with fingerprint</button>
+  <button class="btn" id="go-password">Sign in with account number</button>
+  <button class="btn btn-link" id="go-signup">New to Tapnod? Create an account</button>
+</section>
+
+<section class="screen" id="s-signin">
+  <div class="stack">
+    <div class="eyebrow">Sign in</div>
+    <h1 class="h2">Your account number and password</h1>
+  </div>
+  <form class="form card" id="signin-form" novalidate>
+    <div class="field"><label for="in-acct">Account number</label>
+      <input class="input mono" id="in-acct" inputmode="numeric" autocomplete="username" maxlength="10" placeholder="10 digits" required></div>
+    <div class="field"><label for="in-pass">Password</label>
+      <input class="input" id="in-pass" type="password" autocomplete="current-password" required></div>
+    <p class="error" id="signin-err" role="alert"></p>
+    <button class="btn btn-primary" type="submit">Sign in</button>
+  </form>
+  <div class="spacer"></div>
+  <button class="btn btn-link" data-go="s-welcome">Back</button>
+</section>
+
+<section class="screen" id="s-signup">
+  <div class="stack">
+    <div class="eyebrow">Create account · 1 of 3</div>
+    <h1 class="h2">Your details</h1>
+    <p class="body">Use the account your card is linked to.</p>
+  </div>
+  <form class="form card" id="signup-form" novalidate>
+    <div class="field"><label for="up-name">Full name</label>
+      <input class="input" id="up-name" autocomplete="name" required></div>
+    <div class="field"><label for="up-acct">Account number</label>
+      <input class="input mono" id="up-acct" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="10 digits" required></div>
+    <div class="field"><label for="up-phone">Phone number <span class="hint">(optional)</span></label>
+      <input class="input mono" id="up-phone" inputmode="tel" autocomplete="tel"></div>
+    <div class="field"><label for="up-pass">Password</label>
+      <input class="input" id="up-pass" type="password" autocomplete="new-password" minlength="6" required>
+      <span class="hint">At least 6 characters.</span></div>
+    <div class="field"><label>Language for payments</label><div class="chips" id="up-langs"></div></div>
+    <p class="error" id="signup-err" role="alert"></p>
+    <button class="btn btn-primary" type="submit">Create account</button>
+  </form>
+  <button class="btn btn-link" data-go="s-welcome">Back</button>
+</section>
+
+<!-- ============ ONBOARDING ============ -->
+
+<section class="screen" id="s-finger">
+  <div class="stack">
+    <div class="eyebrow">Create account · 2 of 3</div>
+    <h1 class="h2">Add your fingerprint</h1>
+    <p class="body">You'll use it to sign in and to approve every payment. Your phone asks you to save a passkey for Tapnod.</p>
+  </div>
+  <div class="card idcard">
+    <div><div class="eyebrow">Your Tapnod ID</div><div class="num mono" id="new-id">TN-0000-XX</div></div>
+    <p class="small">Shops can find you on the Tapnod POS by your name or this ID.</p>
+  </div>
+  <div class="spacer"></div>
+  <p class="error" id="finger-err" role="alert"></p>
+  <button class="btn btn-primary" id="do-finger">Add fingerprint</button>
+  <button class="btn btn-link" id="skip-finger">Skip for now</button>
+</section>
+
+<section class="screen" id="s-notify">
+  <div class="stack">
+    <div class="eyebrow">Create account · 3 of 3</div>
+    <h1 class="h2">Turn on notifications</h1>
+    <p class="body">So your phone alerts you when a shop charges your card, even when Tapnod is closed or you're signed out.</p>
+  </div>
+  <div class="spacer"></div>
+  <p class="error" id="notify-err" role="alert"></p>
+  <button class="btn btn-primary" id="do-notify">Turn on notifications</button>
+  <button class="btn btn-link" id="skip-notify">Skip for now</button>
+</section>
+
+<!-- ============ SIGNED IN ============ -->
+
+<section class="screen" id="s-home">
+  <div class="card ink idcard">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="eyebrow">Tapnod ID</div>
+      <span class="pill" style="background:#1d2a22;color:#8fe0a8"><i class="dot live"></i>Live</span>
+    </div>
+    <div class="num mono" id="home-id">TN-0000-XX</div>
+    <div style="display:flex;justify-content:space-between">
+      <span class="small" id="home-name">Name</span>
+      <span class="small mono" id="home-acct">••••0000</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="h3" data-t="waiting">Waiting for a payment</div>
+    <p class="body" style="margin-top:6px" data-t="waitingBody"></p>
+  </div>
+  <div class="grid grid-2">
+    <button class="card tile-stat" style="text-align:left;font:inherit;cursor:pointer" data-settings>
+      <span class="eyebrow">Notifications</span><span class="pill" id="st-notify">…</span></button>
+    <button class="card tile-stat" style="text-align:left;font:inherit;cursor:pointer" data-settings>
+      <span class="eyebrow">Fingerprint</span><span class="pill" id="st-finger">…</span></button>
+    <button class="card tile-stat" style="text-align:left;font:inherit;cursor:pointer" data-settings>
+      <span class="eyebrow">Voice</span><span class="t" id="st-voice">…</span></button>
+    <button class="card tile-stat" style="text-align:left;font:inherit;cursor:pointer" data-settings>
+      <span class="eyebrow">Language</span><span class="t" id="st-lang">…</span></button>
+  </div>
+</section>
+
+<section class="screen" id="s-pending" aria-live="assertive">
+  <div class="card stack center" style="padding:28px 20px">
+    <div class="eyebrow" id="p-merchant">Merchant</div>
+    <div class="amount" id="p-amount">₦0</div>
+    <p class="body" id="p-text"></p>
+    <div><span class="pill grey" id="p-card"></span></div>
+    <div class="bar" style="margin-top:8px"><i id="p-bar"></i></div>
+    <p class="small" id="p-left"></p>
+  </div>
+  <div class="spacer"></div>
+  <form class="form hidden" id="pw-approve" novalidate>
+    <div class="field"><label for="ap-pass">No fingerprint on this phone. Enter your password to approve.</label>
+      <input class="input" id="ap-pass" type="password" autocomplete="current-password"></div>
+  </form>
+  <p class="error" id="approve-err" role="alert"></p>
+  <button class="btn hidden" id="listen" data-t="tapToListen">Tap to listen</button>
+  <button class="btn btn-primary" id="approve" data-t="approve">Approve with fingerprint</button>
+  <div class="grid grid-2">
+    <button class="btn" id="repeat" data-t="repeat">Repeat</button>
+    <button class="btn" id="decline" data-t="decline">Decline</button>
+  </div>
+</section>
+
+<section class="screen" id="s-result" aria-live="assertive">
+  <div class="card center" style="padding:8px 20px 28px">
+    <div class="r-icon" id="r-icon" aria-hidden="true">✓</div>
+    <div class="h2" id="r-title">Approved</div>
+    <p class="body" style="margin-top:10px" id="r-body"></p>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn btn-primary" id="done" data-t="done">Done</button>
+</section>
+
+<section class="screen" id="s-settings">
+  <h1 class="h2">Settings</h1>
+
+  <div class="eyebrow section-title">Language</div>
+  <div class="card"><p class="small">Screen, voice and notifications.</p><div class="chips" id="set-langs" style="margin-top:12px"></div></div>
+
+  <div class="eyebrow section-title">Voice</div>
+  <p class="small" style="margin:0 4px" id="voice-help"></p>
+  <div class="list" id="voices"></div>
+  <div class="card stack">
+    <label class="small" for="speed">Speed</label>
+    <input type="range" id="speed" min="0.7" max="1.3" step="0.05">
+    <button class="btn" id="test-voice">Play a sample</button>
+  </div>
+
+  <div class="eyebrow section-title">Security</div>
+  <div class="list">
+    <button class="row-item" id="set-finger"><span><span class="t">Fingerprint</span><span class="s" id="set-finger-s"></span></span><span class="small">Add</span></button>
+    <button class="row-item" id="set-notify"><span><span class="t">Notifications</span><span class="s" id="set-notify-s"></span></span><span class="small">Turn on</span></button>
+    <button class="row-item" id="test-notify"><span><span class="t">Send a test notification</span><span class="s" id="test-notify-s"></span></span><span class="small">Send</span></button>
+  </div>
+
+  <div class="eyebrow section-title">Account</div>
+  <div class="list">
+    <div class="row-item" style="cursor:default"><span><span class="t" id="set-name"></span><span class="s mono" id="set-acct"></span></span></div>
+    <button class="row-item" id="signout"><span class="t" style="color:var(--red)">Sign out</span></button>
+  </div>
+  <p class="small" style="margin:0 4px">After signing out you still get payment notifications on this phone.</p>
+
+  <button class="btn btn-primary" id="close-settings" style="margin-top:8px">Done</button>
+</section>
+
+<button class="btn btn-primary soundbar" id="soundbar">Tap here to turn on Tapnod's voice</button>
+
+<script>
+const I = window.TapnodI18n;
+const $ = (id) => document.getElementById(id);
+const LOCAL = 'tapnod_local';
+
+/* ---------------- state ---------------- */
+let token = localStorage.getItem('tapnod_token') || '';
+let me = null;            // the signed-in customer
+let hasFinger = false;
+let config = { push_public_key: '', nigerian_voices: false };
+const local = Object.assign({ source: 'auto', phoneVoice: '', speed: 1, signupLang: 'en' }, JSON.parse(localStorage.getItem(LOCAL) || '{}'));
+const saveLocal = () => localStorage.setItem(LOCAL, JSON.stringify(local));
+let current = null, shownResultFor = null, lastScreen = 's-home';
+const L = () => (me && me.prefs.lang) || local.signupLang || 'en';
+const useNigerian = () => config.nigerian_voices && local.source !== 'phone';
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.id === id));
+  const signedIn = Boolean(me) && !['s-welcome', 's-signin', 's-signup'].includes(id);
+  $('open-settings').classList.toggle('hidden', !signedIn || id === 's-settings');
+  $('who').classList.toggle('hidden', !signedIn);
+  if (id !== 's-settings') lastScreen = id;
+  if (me && (id === 's-home' || id === 's-settings')) renderStatus();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('[data-go]').forEach((b) => { b.onclick = () => show(b.dataset.go); });
+
+/* ---------------- api ---------------- */
+async function api(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = 'Bearer ' + token;
+  const r = await fetch(path, { method: opts.method || (opts.body ? 'POST' : 'GET'), headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401 && path.startsWith('/api/me')) signOut(true);
+  if (!r.ok) { const e = new Error(data.message || 'Something went wrong.'); e.status = r.status; e.field = data.field; throw e; }
+  return data;
+}
+
+/* ---------------- base64url ---------------- */
+const b64 = {
+  enc: (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+  dec: (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)),
+};
+
+/* ---------------- language ---------------- */
+function applyLanguage() {
+  document.documentElement.lang = L() === 'pcm' ? 'en' : L();
+  document.querySelectorAll('[data-t]').forEach((el) => { el.textContent = I.t(L(), el.dataset.t); });
+  if (current && current.status === 'pending') $('p-text').textContent = I.sayFor(L(), 'pending', current).shown;
+  for (const [box, pick] of [[$('up-langs'), (c) => { local.signupLang = c; saveLocal(); }], [$('set-langs'), setLang]]) {
+    box.innerHTML = '';
+    for (const [code, l] of Object.entries(I.LANGS)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip' + (code === L() ? ' on' : '');
+      b.textContent = l.name;
+      b.setAttribute('aria-pressed', code === L());
+      b.onclick = () => { pick(code); applyLanguage(); };
+      box.appendChild(b);
+    }
+  }
+  if ($('st-lang')) $('st-lang').textContent = I.LANGS[L()].name;
+}
+async function setLang(code) {
+  if (!me) return;
+  me.prefs.lang = code;
+  applyLanguage(); renderVoices();
+  try { await api('/api/me/prefs', { body: { lang: code } }); } catch {}
+}
+
+/* ---------------- voice ---------------- */
+let soundUnlocked = false, phoneVoices = [], ngVoices = [];
+function showSoundHelp() { $('soundbar').classList.add('on'); if (current && current.status === 'pending') $('listen').classList.remove('hidden'); }
+function hideSoundHelp() { $('soundbar').classList.remove('on'); $('listen').classList.add('hidden'); }
+function phoneSay(text) {
+  if (!('speechSynthesis' in window)) return showSoundHelp();
+  const u = new SpeechSynthesisUtterance(text);
+  const all = speechSynthesis.getVoices();
+  u.voice = all.find((v) => v.voiceURI === local.phoneVoice) || all.find((v) => v.lang === 'en-NG') ||
+    all.find((v) => v.lang === 'en-GB') || all.find((v) => v.lang.startsWith('en')) || null;
+  if (u.voice) u.lang = u.voice.lang;
+  u.rate = Number(local.speed) || 1;
+  let started = false;
+  u.onstart = () => { started = true; hideSoundHelp(); };
+  u.onerror = (e) => { if (!started && e.error !== 'interrupted' && e.error !== 'canceled') showSoundHelp(); };
+  if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
+  speechSynthesis.resume();
+  setTimeout(() => speechSynthesis.speak(u), 80);
+  setTimeout(() => { if (!started) showSoundHelp(); }, 2500);
+}
+const player = new Audio();
+async function playUrl(url, fallback) {
+  try { if ('speechSynthesis' in window) speechSynthesis.cancel(); player.src = url; player.playbackRate = Number(local.speed) || 1; await player.play(); hideSoundHelp(); }
+  catch (e) { if (e && e.name === 'NotAllowedError') showSoundHelp(); else phoneSay(fallback); }
+}
+async function say(text) {
+  if (!useNigerian()) return phoneSay(text);
+  try { const r = await api('/api/tts', { body: { text, voice: (me && me.prefs.voice) || '' } }); return playUrl(r.audio_url, text); }
+  catch { phoneSay(text); }
+}
+function loadPhoneVoices() {
+  if (!('speechSynthesis' in window)) return;
+  phoneVoices = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith('en') || /^(yo|ig|ha)/i.test(v.lang));
+  phoneVoices.sort((a, b) => (b.lang === 'en-NG') - (a.lang === 'en-NG'));
+  renderVoices();
+}
+if ('speechSynthesis' in window) { loadPhoneVoices(); speechSynthesis.onvoiceschanged = loadPhoneVoices; }
+
+function voiceRow(title, sub, on, pick) {
+  const b = document.createElement('button');
+  b.className = 'row-item';
+  b.setAttribute('aria-pressed', on);
+  b.innerHTML = '<span><span class="t"></span><span class="s"></span></span><span class="radio"></span>';
+  b.querySelector('.t').textContent = title;
+  b.querySelector('.s').textContent = sub || '';
+  b.onclick = pick;
+  return b;
+}
+function renderVoices() {
+  const box = $('voices'); if (!box) return;
+  box.innerHTML = '';
+  $('voice-help').textContent = config.nigerian_voices
+    ? 'Nigerian voices speak English, Pidgin, Yorùbá, Igbo and Hausa properly.'
+    : 'Nigerian voices are not switched on for this demo, so Tapnod uses your phone\'s voice.';
+  if (config.nigerian_voices) {
+    const list = ngVoices.length ? ngVoices : [{ id: '', name: 'Default Nigerian voice' }];
+    const fallbackId = (list.find((v) => v.default) || list[0]).id;
+    for (const v of list) {
+      const langs = Array.isArray(v.languages) ? v.languages.join(', ') : v.languages;
+      box.appendChild(voiceRow(v.name, ['Nigerian', v.gender, langs].filter(Boolean).join(' · '),
+        useNigerian() && ((me && me.prefs.voice) || fallbackId) === v.id,
+        async () => { local.source = 'nigerian'; saveLocal(); me.prefs.voice = v.id; renderVoices(); try { await api('/api/me/prefs', { body: { voice: v.id } }); } catch {} }));
+    }
+  }
+  box.appendChild(voiceRow('Phone voice (automatic)', 'Best voice on this phone', !useNigerian() && !local.phoneVoice,
+    () => { local.source = 'phone'; local.phoneVoice = ''; saveLocal(); renderVoices(); }));
+  for (const v of phoneVoices) {
+    box.appendChild(voiceRow(v.name, v.lang, !useNigerian() && local.phoneVoice === v.voiceURI,
+      () => { local.source = 'phone'; local.phoneVoice = v.voiceURI; saveLocal(); renderVoices(); }));
+  }
+  $('speed').value = local.speed;
+  if ($('st-voice')) $('st-voice').textContent = useNigerian() ? 'Nigerian voice' : 'Phone voice';
+}
+
+// The first tap anywhere unlocks sound and keeps the screen awake.
+let wakeLock = null;
+async function keepAwake() { try { if ('wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.onrelease = () => { wakeLock = null; }; } } catch {} }
+function unlockSound() {
+  if (soundUnlocked) return;
+  soundUnlocked = true;
+  if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); }
+  if (me) keepAwake();
+}
+document.addEventListener('pointerdown', unlockSound, { capture: true });
+$('soundbar').onclick = () => { unlockSound(); hideSoundHelp(); if (current && current.status === 'pending') announce(); else phoneSay(I.t(L(), 'sample')); };
+
+/* ---------------- fingerprint (passkeys, checked by the server) ---------------- */
+function inAppBrowser() { return /FBAN|FBAV|Instagram|WhatsApp|Line\/|; wv\)|Snapchat|TikTok/i.test(navigator.userAgent); }
+function fingerError(e) {
+  if (inAppBrowser()) return 'You opened this inside another app. Tap ⋮ and choose "Open in Chrome".';
+  const why = {
+    NotAllowedError: 'Cancelled or timed out. Try again and confirm with your fingerprint.',
+    NotSupportedError: 'This phone can\'t save a passkey yet. Set a screen lock and fingerprint in phone Settings.',
+    SecurityError: 'Open the https:// link. Fingerprint only works on https.',
+    InvalidStateError: 'This fingerprint is already added to your Tapnod account.',
+  }[e && e.name];
+  return why || (e && e.message) || 'Something went wrong.';
+}
+const canPasskey = () => Boolean(window.PublicKeyCredential && navigator.credentials && window.isSecureContext);
+
+// Options are fetched ahead of time, so a tap goes straight to the phone's prompt.
+let regOptions = null, loginOptions = null;
+async function prefetchRegister() { try { regOptions = await api('/api/me/passkey/options', { method: 'POST' }); regOptions.at = Date.now(); } catch { regOptions = null; } }
+async function prefetchLogin() { try { loginOptions = await api('/api/auth/passkey/login/options', { method: 'POST' }); loginOptions.at = Date.now(); } catch { loginOptions = null; } }
+const fresh = (o) => o && Date.now() - o.at < 240000;
+
+async function addFingerprint() {
+  if (!canPasskey()) throw new Error(inAppBrowser() ? fingerError() : 'This browser can\'t use your fingerprint. Open the link in Chrome.');
+  const o = fresh(regOptions) ? regOptions : await api('/api/me/passkey/options', { method: 'POST' });
+  regOptions = null;
+  let cred;
+  try {
+    cred = await navigator.credentials.create({ publicKey: {
+      challenge: b64.dec(o.challenge), rp: { name: 'Tapnod', id: o.rp_id },
+      user: { id: b64.dec(o.user.id), name: o.user.name, displayName: o.user.display_name },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'required' },
+      excludeCredentials: (o.exclude || []).map((id) => ({ type: 'public-key', id: b64.dec(id) })),
+      timeout: 120000,
+    }});
+  } catch (e) { throw new Error(fingerError(e)); }
+  const r = cred.response;
+  if (!r.getPublicKey || !r.getPublicKey()) throw new Error('This browser is too old for Tapnod fingerprints. Update Chrome.');
+  await api('/api/me/passkey', { body: {
+    challenge_id: o.challenge_id, id: cred.id, publicKey: b64.enc(r.getPublicKey()), alg: r.getPublicKeyAlgorithm(),
+    clientDataJSON: b64.enc(r.clientDataJSON), authenticatorData: b64.enc(r.getAuthenticatorData()),
+  }});
+  hasFinger = true;
+}
+
+function assertionBody(cred) {
+  const r = cred.response;
+  return { id: cred.id, clientDataJSON: b64.enc(r.clientDataJSON), authenticatorData: b64.enc(r.authenticatorData), signature: b64.enc(r.signature) };
+}
+
+$('finger-signin').onclick = async () => {
+  $('welcome-err').textContent = '';
+  if (!canPasskey()) { $('welcome-err').textContent = fingerError(); return; }
+  try {
+    const o = fresh(loginOptions) ? loginOptions : await api('/api/auth/passkey/login/options', { method: 'POST' });
+    loginOptions = null;
+    let cred;
+    try {
+      cred = await navigator.credentials.get({ publicKey: { challenge: b64.dec(o.challenge), rpId: o.rp_id, userVerification: 'required', timeout: 120000 } });
+    } catch (e) { throw new Error(fingerError(e)); }
+    const r = await api('/api/auth/passkey/login', { body: { challenge_id: o.challenge_id, ...assertionBody(cred) } });
+    await signedIn(r);
+  } catch (e) { $('welcome-err').textContent = e.message; prefetchLogin(); }
+};
+
+/* ---------------- notifications ---------------- */
+let swReg = null;
+async function registerWorker() { if ('serviceWorker' in navigator) { try { swReg = await navigator.serviceWorker.register('/sw.js', { scope: '/' }); } catch { swReg = null; } } }
+async function subscribePush() {
+  if (!me || !swReg || !('PushManager' in window) || !config.push_public_key || Notification.permission !== 'granted') return false;
+  try {
+    let sub = await swReg.pushManager.getSubscription();
+    if (sub && sub.options && sub.options.applicationServerKey && b64.enc(sub.options.applicationServerKey) !== config.push_public_key) { await sub.unsubscribe(); sub = null; }
+    if (!sub) sub = await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64.dec(config.push_public_key) });
+    await api('/api/me/subscribe', { body: { subscription: sub.toJSON() } });
+    return true;
+  } catch { return false; }
+}
+async function enableNotifications() {
+  if (inAppBrowser()) return 'You opened this inside another app. Open the link in Chrome for notifications.';
+  if (!('Notification' in window) || !swReg) return 'This browser can\'t show notifications. Use Chrome on Android.';
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') return 'Notifications are blocked. In Chrome, tap the lock icon by the address, then Permissions, and allow Notifications.';
+  if (!(await subscribePush())) return 'Allowed, but the phone could not register. Check your internet and try again.';
+  renderStatus();
+  return true;
+}
+
+function renderStatus() {
+  const n = 'Notification' in window ? Notification.permission : 'unsupported';
+  const on = n === 'granted';
+  $('st-notify').textContent = on ? 'On' : 'Off';
+  $('st-notify').className = 'pill' + (on ? '' : ' off');
+  $('st-finger').textContent = hasFinger ? 'Added' : 'Not added';
+  $('st-finger').className = 'pill' + (hasFinger ? '' : ' off');
+  $('set-finger-s').textContent = hasFinger ? 'Added to this account' : 'Not added yet';
+  $('set-notify-s').textContent = on ? 'On for this phone' : n === 'denied' ? 'Blocked in Chrome' : 'Off';
+  if (me) {
+    for (const id of ['home-id']) $(id).textContent = me.tapnod_id;
+    $('home-name').textContent = me.name; $('home-acct').textContent = me.account_masked;
+    $('who').textContent = me.name.split(' ')[0];
+    $('set-name').textContent = me.name; $('set-acct').textContent = me.tapnod_id + ' · ' + me.account_masked;
+  }
+  renderVoices();
+}
+
+/* ---------------- sign up / sign in / out ---------------- */
+async function signedIn(r, opts = {}) {
+  token = r.token; localStorage.setItem('tapnod_token', token);
+  me = r.customer;
+  const info = await api('/api/me');
+  me = info.customer; hasFinger = info.has_fingerprint;
+  applyLanguage(); renderStatus();
+  subscribePush();
+  keepAwake();
+  if (opts.onboarding) { $('new-id').textContent = me.tapnod_id; prefetchRegister(); show('s-finger'); }
+  else show('s-home');
+  poll();
+}
+
+function signOut(silent) {
+  token = ''; localStorage.removeItem('tapnod_token');
+  me = null; current = null;
+  if (!silent) prefetchLogin();
+  show('s-welcome');
+}
+
+$('go-signup').onclick = () => { applyLanguage(); show('s-signup'); };
+$('go-password').onclick = () => show('s-signin');
+
+$('signup-form').onsubmit = async (e) => {
+  e.preventDefault();
+  $('signup-err').textContent = '';
+  const btn = e.submitter || e.target.querySelector('button[type=submit]'); btn.disabled = true;
+  try {
+    const r = await api('/api/auth/signup', { body: {
+      name: $('up-name').value, account_number: $('up-acct').value, phone: $('up-phone').value,
+      password: $('up-pass').value, lang: local.signupLang,
+    }});
+    await signedIn(r, { onboarding: true });
+  } catch (err) {
+    $('signup-err').textContent = err.message;
+    if (err.field) ({ name: $('up-name'), account_number: $('up-acct'), password: $('up-pass') })[err.field]?.focus();
+  } finally { btn.disabled = false; }
+};
+
+$('signin-form').onsubmit = async (e) => {
+  e.preventDefault();
+  $('signin-err').textContent = '';
+  try {
+    const r = await api('/api/auth/login', { body: { account_number: $('in-acct').value, password: $('in-pass').value } });
+    $('in-pass').value = '';
+    await signedIn(r);
+  } catch (err) { $('signin-err').textContent = err.message; }
+};
+
+$('do-finger').onclick = async () => {
+  $('finger-err').textContent = '';
+  $('do-finger').disabled = true;
+  try { await addFingerprint(); show('s-notify'); }
+  catch (e) { $('finger-err').textContent = e.message; prefetchRegister(); }
+  finally { $('do-finger').disabled = false; }
+};
+$('skip-finger').onclick = () => show('s-notify');
+$('do-notify').onclick = async () => {
+  $('notify-err').textContent = '';
+  const r = await enableNotifications();
+  if (r === true) { phoneSay(I.t(L(), 'sample')); show('s-home'); } else $('notify-err').textContent = r;
+};
+$('skip-notify').onclick = () => show('s-home');
+
+/* ---------------- settings ---------------- */
+document.querySelectorAll('[data-settings]').forEach((b) => { b.onclick = () => $('open-settings').click(); });
+$('open-settings').onclick = () => { renderStatus(); prefetchRegister(); show('s-settings'); };
+$('close-settings').onclick = () => show(current && current.status === 'pending' ? 's-pending' : (lastScreen === 's-settings' ? 's-home' : lastScreen));
+$('speed').oninput = (e) => { local.speed = Number(e.target.value); saveLocal(); };
+$('test-voice').onclick = () => say(I.t(L(), 'sample'));
+$('set-finger').onclick = async () => {
+  try { await addFingerprint(); $('set-finger-s').textContent = 'Added to this account'; renderStatus(); }
+  catch (e) { $('set-finger-s').textContent = e.message; prefetchRegister(); }
+};
+$('set-notify').onclick = async () => { const r = await enableNotifications(); $('set-notify-s').textContent = r === true ? 'On for this phone' : r; };
+$('test-notify').onclick = async () => {
+  const on = await enableNotifications();
+  if (on !== true) { $('test-notify-s').textContent = on; return; }
+  try { await api('/api/me/test-notification', { method: 'POST' }); $('test-notify-s').textContent = 'Sent. Lock your phone to see it.'; }
+  catch (e) { $('test-notify-s').textContent = e.message; }
+};
+$('signout').onclick = () => signOut(false);
+
+/* ---------------- payments ---------------- */
+async function poll() {
+  if (!me) return;
+  let req = null;
+  try { req = (await api('/api/me/latest')).request; } catch { return; }
+  if (!req) return;
+  if (req.status === 'pending') {
+    if (!current || current.request_id !== req.request_id) showPending(req);
+    else {
+      const gotAudio = !current.audio_url && req.audio_url;
+      current = req;
+      if (gotAudio && waitingForAudio) { waitingForAudio = false; announce(); }
+    }
+    updateCountdown();
+    return;
+  }
+  if (current && current.request_id === req.request_id && shownResultFor !== req.request_id) showResult(req);
+}
+
+let waitingForAudio = false;
+function showPending(req) {
+  current = req;
+  $('p-merchant').textContent = req.merchant_name;
+  $('p-amount').textContent = I.moneyText(req.amount_kobo);
+  $('p-text').textContent = I.sayFor(L(), 'pending', req).shown;
+  $('p-card').textContent = req.card_last4 ? (req.card_scheme || 'Card') + ' ···· ' + req.card_last4 : 'Charged to your Tapnod account';
+  $('approve-err').textContent = '';
+  $('pw-approve').classList.toggle('hidden', hasFinger);
+  $('approve').textContent = hasFinger ? I.t(L(), 'approve') : 'Approve with password';
+  $('listen').classList.add('hidden');
+  if ($('s-settings').classList.contains('on')) lastScreen = 's-pending'; else show('s-pending');
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+  approveOptions = null;
+  if (hasFinger) fetchApproveOptions();
+  if (useNigerian() && !req.audio_url) {
+    waitingForAudio = true;
+    setTimeout(() => { if (waitingForAudio && current && current.request_id === req.request_id) { waitingForAudio = false; announce(); } }, 6000);
+  } else announce();
+  setTimeout(() => approveWithFinger(true), 1200);
+}
+
+function announce() {
+  if (!current) return;
+  const text = I.sayFor(L(), 'pending', current).spoken;
+  if (useNigerian() && current.audio_url) playUrl(current.audio_url, text); else phoneSay(text);
+}
+
+function updateCountdown() {
+  if (!current) return;
+  const left = Math.max(0, current.expires_at_ms - Date.now());
+  $('p-bar').style.width = (left / 120000 * 100) + '%';
+  $('p-left').textContent = I.t(L(), 'secondsLeft', { n: Math.ceil(left / 1000) });
+}
+
+// Approving: the server gives a challenge for THIS payment, the phone signs it with the fingerprint passkey.
+let approveOptions = null, fingerBusy = false;
+const autoTried = new Set();
+async function fetchApproveOptions() {
+  if (!current) return null;
+  const id = current.request_id;
+  try { approveOptions = await api('/api/customer/requests/' + id + '/approve/options', { method: 'POST' }); approveOptions.request_id = id; approveOptions.at = Date.now(); }
+  catch { approveOptions = null; }
+  return approveOptions;
+}
+async function approveWithFinger(auto) {
+  if (!current || current.status !== 'pending' || fingerBusy || !hasFinger) return;
+  if (auto) {
+    if (autoTried.has(current.request_id) || document.visibilityState !== 'visible') return;
+    autoTried.add(current.request_id);
+  }
+  fingerBusy = true; $('approve').disabled = true; $('approve-err').textContent = '';
+  const id = current.request_id;
+  try {
+    let o = approveOptions && approveOptions.request_id === id && fresh(approveOptions) ? approveOptions : await fetchApproveOptions();
+    approveOptions = null;
+    if (!o) throw new Error('Could not start the approval. Check your internet.');
+    let cred;
+    try {
+      cred = await navigator.credentials.get({ publicKey: {
+        challenge: b64.dec(o.challenge), rpId: o.rp_id, userVerification: 'required', timeout: 120000,
+        allowCredentials: o.allow.map((c) => ({ type: 'public-key', id: b64.dec(c) })),
+      }});
+    } catch (e) { if (!auto) throw new Error(fingerError(e)); return; }
+    const r = await api('/api/customer/requests/' + id + '/approve', { body: { challenge_id: o.challenge_id, ...assertionBody(cred) } });
+    showResult(r.request);
+  } catch (e) {
+    $('approve-err').textContent = e.message;
+  } finally {
+    fingerBusy = false; $('approve').disabled = false;
+    if (current && current.status === 'pending' && !approveOptions) fetchApproveOptions();
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { if (me) keepAwake(); setTimeout(() => approveWithFinger(true), 400); }
+});
+
+$('approve').onclick = async () => {
+  if (hasFinger) return approveWithFinger(false);
+  try {
+    const r = await api('/api/customer/requests/' + current.request_id + '/approve', { body: { password: $('ap-pass').value } });
+    $('ap-pass').value = '';
+    showResult(r.request);
+  } catch (e) { $('approve-err').textContent = e.message; }
+};
+$('decline').onclick = async () => {
+  if (!current) return;
+  try { const r = await api('/api/customer/requests/' + current.request_id + '/decline', { method: 'POST' }); showResult(r.request); }
+  catch (e) { $('approve-err').textContent = e.message; }
+};
+$('repeat').onclick = () => announce();
+$('listen').onclick = () => { hideSoundHelp(); announce(); };
+
+function showResult(req) {
+  current = req;
+  shownResultFor = req.request_id;
+  waitingForAudio = false;
+  const titles = { approved: 'paid', declined: 'stopped', expired: 'timedOut', cancelled: 'cancelledTitle' };
+  const good = req.status === 'approved';
+  $('r-icon').textContent = good ? '✓' : '✕';
+  $('r-icon').className = 'r-icon' + (good ? '' : ' bad');
+  $('r-title').textContent = I.t(L(), titles[req.status] || 'paid');
+  const words = I.sayFor(L(), req.status, req);
+  $('r-body').textContent = words.shown + (good ? ' ' + req.reference : '');
+  show('s-result');
+  if (navigator.vibrate) navigator.vibrate(good ? [80] : [300]);
+  say(words.spoken);
+}
+$('done').onclick = () => { current = null; show('s-home'); };
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data && (e.data.type === 'tapnod-push' || e.data.type === 'tapnod-open')) poll();
+  });
+}
+
+/* ---------------- start ---------------- */
+async function boot() {
+  try { config = await (await fetch('/api/config')).json(); } catch {}
+  if (config.nigerian_voices) { try { ngVoices = (await (await fetch('/api/voices')).json()).voices || []; } catch {} }
+  await registerWorker();
+  applyLanguage();
+  if (token) {
+    try {
+      const info = await api('/api/me');
+      me = info.customer; hasFinger = info.has_fingerprint;
+      applyLanguage(); renderStatus(); subscribePush();
+      show('s-home');
+      if (!(navigator.userActivation && navigator.userActivation.hasBeenActive)) $('soundbar').classList.add('on');
+      poll();
+      return;
+    } catch { /* token expired: fall through to sign in */ }
+  }
+  prefetchLogin();
+  show(location.hash === '#signup' ? 's-signup' : 's-welcome');
+}
+boot();
+setInterval(poll, 1000);
+setInterval(updateCountdown, 1000);
+setInterval(subscribePush, 300000);
+</script>
+</body>
+</html>

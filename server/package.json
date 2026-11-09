@@ -1,9 +1,10 @@
 {
-  "name": "tapnod-demo-server",
-  "version": "1.0.0",
+  "name": "tapnod-server",
+  "version": "2.0.0",
   "private": true,
-  "description": "Tapnod demo backend and customer web app (no dependencies)",
+  "description": "Tapnod backend, landing page and customer web app",
   "main": "server.js",
   "scripts": { "start": "node server.js" },
-  "engines": { "node": ">=18" }
+  "engines": { "node": ">=18" },
+  "dependencies": { "pg": "^8.13.1" }
 }
