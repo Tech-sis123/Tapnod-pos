@@ -12,174 +12,189 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 <script src="/i18n.js"></script>
 <style>
-  :root { --ink:#0B0B0B; --paper:#F2F0EA; --lime:#D4FF3A; --mute:#6B6A66; --line:#D9D6CE; --red:#FF4D3D; --green:#2BD46B; }
+  :root { --ink:#111; --mute:#6E6E73; --line:#E5E5EA; --soft:#F5F5F7; --accent:#1F7A3A; --red:#C62828; --green:#1F7A3A; }
   * { box-sizing: border-box; margin: 0; }
-  html, body { min-height: 100%; }
+  html, body { min-height: 100%; background: #fff; }
   body {
-    font-family: Inter, system-ui, -apple-system, sans-serif; background: var(--paper); color: var(--ink);
-    padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom));
-    display: flex; flex-direction: column; gap: 10px; min-height: 100vh; -webkit-tap-highlight-color: transparent;
+    font-family: Inter, system-ui, -apple-system, sans-serif; color: var(--ink);
+    max-width: 480px; margin: 0 auto; padding: 0 20px max(20px, env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; min-height: 100vh; -webkit-tap-highlight-color: transparent;
   }
-  .tile { border-radius: 22px; padding: 20px; background: #fff; }
-  .ink { background: var(--ink); color: #fff; }
-  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
-  .ink .eyebrow { color: var(--lime); }
-  .big { font-size: clamp(40px, 13vw, 68px); font-weight: 800; letter-spacing: -.045em; line-height: .95; }
-  .mid { font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1.05; }
-  .muted { color: var(--mute); font-size: 15px; line-height: 1.4; }
-  .ink .muted { color: #A9A7A0; }
-  header { display: flex; justify-content: space-between; align-items: flex-end; min-height: 112px; }
-  .logo { font-size: 40px; font-weight: 800; letter-spacing: -.05em; }
-  .logo span { color: var(--lime); }
-  .head-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
-  .gear { background: #222; color: #fff; border: 0; border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; width: auto; }
-  .screen { display: none; flex: 1; flex-direction: column; gap: 10px; }
+  header {
+    position: sticky; top: 0; z-index: 5; background: #fff;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 0 14px; border-bottom: 1px solid var(--line);
+  }
+  .logo { font-size: 24px; font-weight: 800; letter-spacing: -.03em; }
+  .logo span { color: var(--accent); }
+  .head-right { display: flex; align-items: center; gap: 14px; }
+  .tag { font-size: 14px; color: var(--mute); }
+  .gear { background: none; border: 0; padding: 0; width: auto; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+  .big { font-size: clamp(30px, 9vw, 40px); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+  .amount { font-size: clamp(44px, 14vw, 60px); font-weight: 700; letter-spacing: -.03em; line-height: 1; }
+  .mid { font-size: 26px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; }
+  .muted { color: var(--mute); font-size: 16px; line-height: 1.5; }
+  .screen { display: none; flex: 1; flex-direction: column; gap: 12px; padding-top: 28px; }
   .screen.on { display: flex; }
-  .grow { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
+  .tile { padding: 0; }
+  .grow { flex: 1; display: flex; flex-direction: column; }
+  .center { text-align: center; align-items: center; }
+  .section { border-top: 1px solid var(--line); padding: 20px 0; }
+  .section:first-child { border-top: 0; padding-top: 0; }
   button {
-    font: inherit; border: 0; border-radius: 18px; width: 100%; padding: 20px; cursor: pointer;
-    font-size: 18px; font-weight: 800; letter-spacing: -.01em; color: var(--ink);
+    font: inherit; border: 0; border-radius: 12px; width: 100%; padding: 16px; cursor: pointer;
+    font-size: 17px; font-weight: 600; color: var(--ink); background: var(--soft);
   }
-  button:active { transform: scale(.985); }
+  button:active { opacity: .85; }
   button:disabled { opacity: .5; }
-  .btn-lime { background: var(--lime); }
-  .btn-ink { background: var(--ink); color: #fff; }
-  .btn-ghost { background: transparent; border: 2px solid var(--ink); }
-  .btn-soft { background: var(--paper); font-size: 15px; padding: 14px; }
+  .btn-primary { background: var(--ink); color: #fff; }
+  .btn-ghost { background: #fff; border: 1.5px solid var(--line); }
+  .btn-soft { background: var(--soft); font-size: 15px; padding: 13px; }
+  .btn-link { background: none; color: var(--mute); font-size: 15px; font-weight: 500; padding: 10px; }
   .row { display: flex; gap: 10px; }
   .row > * { flex: 1; }
-  .pulse { width: 18px; height: 18px; border-radius: 50%; background: var(--lime); position: relative; }
-  .pulse::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--lime); animation: ring 1.6s ease-out infinite; }
-  @keyframes ring { from { transform: scale(1); opacity: .8 } to { transform: scale(3.2); opacity: 0 } }
-  .bar { height: 6px; background: #2A2A2A; border-radius: 6px; overflow: hidden; margin-top: 16px; }
-  .bar i { display: block; height: 100%; background: var(--lime); width: 100%; transition: width 1s linear; }
-  .result-approved { background: var(--green); }
-  .result-declined, .result-expired, .result-cancelled { background: var(--red); color: #fff; }
-  .tag { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #222; color: #fff; font-size: 13px; font-weight: 600; }
+  .live { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--green); }
+  .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: blink 1.6s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .25 } }
+  .bar { height: 3px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 22px; }
+  .bar i { display: block; height: 100%; background: var(--ink); width: 100%; transition: width 1s linear; }
+  .card-line { display: inline-block; margin-top: 14px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--mute); }
+  .r-icon { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; font-size: 38px; font-weight: 700; color: #fff; margin: 40px auto 20px; background: var(--green); }
+  .result-declined .r-icon, .result-expired .r-icon, .result-cancelled .r-icon { background: var(--red); }
   .note { font-size: 13px; color: var(--mute); text-align: center; padding: 4px 8px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-  .chip { width: auto; padding: 12px 16px; font-size: 15px; border-radius: 999px; background: var(--paper); font-weight: 600; }
-  .chip.on { background: var(--ink); color: var(--lime); }
-  .voice { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--paper); margin-top: 8px; font-size: 15px; font-weight: 600; text-align: left; }
-  .voice small { display: block; font-weight: 400; color: var(--mute); font-size: 12px; margin-top: 2px; }
-  .voice.on { background: var(--ink); color: #fff; }
-  .voice.on small { color: #A9A7A0; }
-  .voice .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; flex: none; }
-  .voice.on .dot { background: var(--lime); border-color: var(--lime); }
-  .status { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; margin-top: 10px; }
-  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .chip { width: auto; padding: 10px 16px; font-size: 15px; border-radius: 999px; background: #fff; border: 1.5px solid var(--line); font-weight: 500; }
+  .chip.on { border-color: var(--ink); background: var(--ink); color: #fff; }
+  .voice { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px 2px; border-radius: 0; background: none; border-bottom: 1px solid var(--line); font-size: 16px; font-weight: 500; text-align: left; }
+  .voice small { display: block; font-weight: 400; color: var(--mute); font-size: 13px; margin-top: 2px; }
+  .voice .dot { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--line); flex: none; }
+  .voice.on .dot { border: 6px solid var(--ink); }
+  .status-list { border-top: 1px solid var(--line); }
+  .status { display: flex; align-items: center; gap: 10px; font-size: 15px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex: none; }
   .status.good::before { background: var(--green); }
   .status.bad::before { background: var(--red); }
+  .section .status { border-bottom: 0; padding-bottom: 0; }
   input[type=range] { width: 100%; margin-top: 14px; accent-color: var(--ink); }
   .listen { display: none; }
-  .soundbar { position: fixed; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 9;
-    background: var(--lime); color: var(--ink); box-shadow: 0 8px 30px rgba(0,0,0,.25); display: none; }
-  .soundbar.on { display: block; }
-  .err { color: var(--red); font-size: 14px; font-weight: 600; margin-top: 10px; }
   .listen.on { display: block; }
-  @media (prefers-reduced-motion: reduce) { .pulse::after { animation: none; } }
+  .soundbar { position: fixed; left: 50%; transform: translateX(-50%); width: calc(100% - 40px); max-width: 440px;
+    bottom: max(20px, env(safe-area-inset-bottom)); z-index: 9; background: var(--ink); color: #fff;
+    box-shadow: 0 10px 30px rgba(0,0,0,.2); display: none; }
+  .soundbar.on { display: block; }
+  .err { color: var(--red); font-size: 15px; font-weight: 500; margin-top: 14px; line-height: 1.4; }
+  .actions { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; }
+  @media (prefers-reduced-motion: reduce) { .live i { animation: none; } }
 </style>
 </head>
 <body>
 
-<header class="tile ink">
-  <div>
-    <div class="eyebrow">Tapnod · Customer</div>
-    <div class="logo">tapnod<span>.</span></div>
-  </div>
+<header>
+  <div class="logo">tapnod<span>.</span></div>
   <div class="head-right">
-    <button class="gear" id="open-settings" aria-label="Settings">Settings</button>
-    <div class="tag" id="who">…</div>
+    <span class="tag" id="who">…</span>
+    <button class="gear" id="open-settings">Settings</button>
   </div>
 </header>
 
-<!-- 1. Start: one tap unlocks voice, fingerprint and notifications -->
+<!-- 1. Start: one tap opens the fingerprint setup straight away -->
 <section class="screen on" id="s-start">
-  <div class="tile grow">
+  <div class="grow">
     <div class="eyebrow">Welcome</div>
-    <div class="mid" style="margin-top:10px" id="hello">Hi.</div>
-    <p class="muted" style="margin-top:10px">Pick your language, then tap Start. Tapnod reads every payment out loud and sends a notification, and you approve with your fingerprint.</p>
+    <div class="big" style="margin-top:8px" id="hello">Hi.</div>
+    <p class="muted" style="margin-top:12px">Tapnod tells you out loud when a shop charges your card, and you pay with your fingerprint. Choose your language.</p>
     <div class="chips" id="start-langs"></div>
   </div>
-  <button class="btn-ink" id="start">Start</button>
-  <p class="note" id="start-note"></p>
+  <div class="actions">
+    <button class="btn-primary" id="start">Start</button>
+    <p class="note" id="start-note">Your phone will ask for your fingerprint next.</p>
+  </div>
 </section>
 
-<!-- 1b. Fingerprint setup (its own tap, so the browser allows it) -->
+<!-- 1b. Fingerprint setup (only shown if the automatic prompt didn't work) -->
 <section class="screen" id="s-finger">
-  <div class="tile ink grow">
+  <div class="grow">
     <div class="eyebrow">Step 1 of 2</div>
-    <div class="big" style="margin-top:16px">Set up your fingerprint</div>
-    <p class="muted" style="margin-top:12px">Your phone will ask you to create a passkey for Tapnod. Confirm with your fingerprint. From then on, every payment needs your finger.</p>
+    <div class="big" style="margin-top:8px">Set up your fingerprint</div>
+    <p class="muted" style="margin-top:12px">Your phone asks you to create a passkey for Tapnod. Confirm with your finger. After that, payments only need your finger.</p>
     <p class="err" id="finger-err"></p>
   </div>
-  <button class="btn-lime" id="do-finger">Set up fingerprint</button>
-  <button class="btn-ghost" id="skip-finger">Skip for now</button>
+  <div class="actions">
+    <button class="btn-primary" id="do-finger">Try again</button>
+    <button class="btn-link" id="skip-finger">Skip for now</button>
+  </div>
 </section>
 
 <!-- 1c. Notifications -->
 <section class="screen" id="s-notify">
-  <div class="tile ink grow">
+  <div class="grow">
     <div class="eyebrow">Step 2 of 2</div>
-    <div class="big" style="margin-top:16px">Turn on notifications</div>
+    <div class="big" style="margin-top:8px">Turn on notifications</div>
     <p class="muted" style="margin-top:12px">So your phone alerts you when a shop charges your card, even when this page is closed.</p>
     <p class="err" id="notify-err"></p>
   </div>
-  <button class="btn-lime" id="do-notify">Turn on notifications</button>
-  <button class="btn-ghost" id="skip-notify">Skip for now</button>
+  <div class="actions">
+    <button class="btn-primary" id="do-notify">Turn on notifications</button>
+    <button class="btn-link" id="skip-notify">Skip for now</button>
+  </div>
 </section>
 
 <!-- 2. Waiting -->
 <section class="screen" id="s-idle">
-  <div class="tile ink grow">
-    <div style="display:flex;align-items:center;gap:14px"><div class="pulse"></div><div class="eyebrow">Live</div></div>
-    <div class="big" style="margin-top:22px" data-t="waiting">Waiting for a payment</div>
+  <div class="grow">
+    <div class="live"><i></i>Live</div>
+    <div class="big" style="margin-top:12px" data-t="waiting">Waiting for a payment</div>
     <p class="muted" style="margin-top:12px" data-t="waitingBody"></p>
   </div>
-  <div class="tile">
-    <div class="status" id="st-notify">Notifications</div><br>
-    <div class="status" id="st-finger">Fingerprint</div><br>
+  <div class="status-list">
+    <div class="status" id="st-notify">Notifications</div>
+    <div class="status" id="st-finger">Fingerprint</div>
     <div class="status" id="st-voice">Voice</div>
   </div>
 </section>
 
 <!-- 3. Payment to approve -->
-<section class="screen" id="s-pending" aria-live="assertive">
-  <div class="tile ink">
+<section class="screen center" id="s-pending" aria-live="assertive">
+  <div class="grow" style="width:100%;padding-top:24px">
     <div class="eyebrow" id="p-merchant">Merchant</div>
-    <div class="big" style="margin-top:14px" id="p-amount">₦0</div>
-    <p class="muted" style="margin-top:10px" id="p-text"></p>
-    <p class="muted" style="margin-top:6px" id="p-card"></p>
+    <div class="amount" style="margin-top:14px" id="p-amount">₦0</div>
+    <p class="muted" style="margin-top:16px" id="p-text"></p>
+    <div><span class="card-line" id="p-card"></span></div>
     <div class="bar"><i id="p-bar"></i></div>
-    <p class="muted" style="margin-top:8px" id="p-left"></p>
+    <p class="muted" style="margin-top:8px;font-size:14px" id="p-left"></p>
   </div>
-  <div class="grow"></div>
-  <button class="btn-soft listen" id="listen" data-t="tapToListen">Tap to listen</button>
-  <button class="btn-lime" id="approve" data-t="approve">Approve with fingerprint</button>
-  <div class="row">
-    <button class="btn-ghost" id="repeat" data-t="repeat">Repeat</button>
-    <button class="btn-ghost" id="decline" data-t="decline">Decline</button>
+  <div class="actions" style="width:100%">
+    <button class="btn-soft listen" id="listen" data-t="tapToListen">Tap to listen</button>
+    <button class="btn-primary" id="approve" data-t="approve">Approve with fingerprint</button>
+    <div class="row">
+      <button class="btn-ghost" id="repeat" data-t="repeat">Repeat</button>
+      <button class="btn-ghost" id="decline" data-t="decline">Decline</button>
+    </div>
   </div>
 </section>
 
 <!-- 4. Result -->
-<section class="screen" id="s-result" aria-live="assertive">
-  <div class="tile grow" id="r-tile">
+<section class="screen center" id="s-result" aria-live="assertive">
+  <div class="grow" id="r-tile">
+    <div class="r-icon" id="r-icon" aria-hidden="true">✓</div>
     <div class="big" id="r-title">Approved</div>
-    <p style="margin-top:12px;font-size:17px;line-height:1.4" id="r-body"></p>
+    <p class="muted" style="margin-top:12px" id="r-body"></p>
   </div>
-  <button class="btn-ink" id="done" data-t="done">Done</button>
+  <div class="actions" style="width:100%">
+    <button class="btn-primary" id="done" data-t="done">Done</button>
+  </div>
 </section>
 
 <!-- 5. Settings -->
 <section class="screen" id="s-settings">
-  <div class="tile">
+  <div class="section">
     <div class="eyebrow">Language</div>
     <p class="muted" style="margin-top:6px">Screen, voice and notifications all use this language.</p>
     <div class="chips" id="set-langs"></div>
   </div>
 
-  <div class="tile">
+  <div class="section">
     <div class="eyebrow">Voice</div>
     <p class="muted" style="margin-top:6px" id="voice-help"></p>
     <div id="ng-voices"></div>
@@ -189,7 +204,7 @@
     <button class="btn-soft" style="margin-top:12px" id="test-voice">Play a sample</button>
   </div>
 
-  <div class="tile">
+  <div class="section">
     <div class="eyebrow">Notifications</div>
     <div class="status" id="set-notify-status">Off</div>
     <div class="row" style="margin-top:12px">
@@ -199,13 +214,13 @@
     <p class="note" id="notify-note"></p>
   </div>
 
-  <div class="tile">
+  <div class="section">
     <div class="eyebrow">Fingerprint</div>
     <div class="status" id="set-finger-status">Not set up</div>
     <button class="btn-soft" style="margin-top:12px" id="redo-finger">Set up fingerprint</button>
   </div>
 
-  <button class="btn-ink" id="close-settings">Save and close</button>
+  <button class="btn-primary" id="close-settings">Save and close</button>
 </section>
 
 <button class="soundbar" id="soundbar">Tap here to turn on Tapnod's voice</button>
@@ -537,10 +552,17 @@ function goLive() {
   keepAwake();
   show('s-idle');
 }
-$('start').onclick = () => {
+$('start').onclick = async () => {
   unlockSound();
-  phoneSay(I.t(L(), 'sample')); // proves the voice works, while we have the tap
-  show(settings.fp ? 's-notify' : 's-finger');
+  if (settings.fp) { phoneSay(I.t(L(), 'sample')); return show('s-notify'); }
+  // Use this tap to open the phone's fingerprint prompt right away (browsers need a tap for it).
+  $('start').disabled = true;
+  const r = await setupFingerprint();
+  $('start').disabled = false;
+  phoneSay(I.t(L(), 'sample'));
+  if (r.ok) return show('s-notify');
+  $('finger-err').textContent = r.error;
+  show('s-finger');
 };
 $('do-finger').onclick = async () => {
   $('finger-err').textContent = '';
@@ -611,7 +633,30 @@ function showPending(req) {
     waitingForAudio = true;
     setTimeout(() => { if (waitingForAudio && current && current.request_id === req.request_id) { waitingForAudio = false; announce(); } }, 6000);
   } else announce();
+  // Give the voice a moment to start, then open the fingerprint prompt.
+  setTimeout(() => approveWithFinger(true), 1200);
 }
+
+// When a payment arrives, the phone's fingerprint prompt opens on its own; touching the sensor approves.
+// If the phone refuses (no recent tap, page in the background) or the person cancels,
+// the Approve button is still there.
+const autoTried = new Set();
+let fingerBusy = false;
+async function approveWithFinger(auto) {
+  if (!current || current.status !== 'pending' || fingerBusy) return;
+  if (auto) {
+    if (!settings.fp || autoTried.has(current.request_id) || document.visibilityState !== 'visible') return;
+    autoTried.add(current.request_id);
+  }
+  fingerBusy = true;
+  $('approve').disabled = true;
+  const id = current.request_id;
+  const ok = await checkFingerprint();
+  fingerBusy = false;
+  $('approve').disabled = false;
+  if (ok && current && current.request_id === id && current.status === 'pending') answer('approve');
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(() => approveWithFinger(true), 400); });
 
 function announce() {
   if (!current) return;
@@ -636,12 +681,7 @@ async function answer(action) {
   } catch { phoneSay('Network problem. Try again.'); }
 }
 
-$('approve').onclick = async () => {
-  $('approve').disabled = true;
-  const ok = await checkFingerprint();
-  $('approve').disabled = false;
-  if (ok) answer('approve');
-};
+$('approve').onclick = () => approveWithFinger(false);
 $('decline').onclick = () => answer('decline');
 $('repeat').onclick = () => announce();
 $('listen').onclick = () => { $('listen').classList.remove('on'); announce(); };
@@ -650,7 +690,8 @@ function showResult(req) {
   shownResultFor = req.request_id;
   waitingForAudio = false;
   const titles = { approved: 'paid', declined: 'stopped', expired: 'timedOut', cancelled: 'cancelledTitle' };
-  $('r-tile').className = 'tile grow result-' + req.status;
+  $('r-tile').className = 'grow result-' + req.status;
+  $('r-icon').textContent = req.status === 'approved' ? '✓' : '✕';
   $('r-title').textContent = I.t(L(), titles[req.status] || 'paid');
   const words = I.sayFor(L(), req.status, req);
   $('r-body').textContent = words.shown + (req.status === 'approved' ? ' · ' + req.reference : '');
