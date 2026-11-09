@@ -40,7 +40,9 @@ data class PosSettings(
     val merchantName: String,
     val merchantId: String,
     val tokenSecret: String,
-    val voice: Boolean
+    val voice: Boolean,
+    /** Demo safety net: if the card number can't be read, still accept the tap as the demo card. */
+    val acceptAnyTap: Boolean
 )
 
 class ApiException(message: String) : Exception(message)

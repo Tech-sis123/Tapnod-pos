@@ -99,7 +99,11 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
         val mode = vm.beginCardRead() ?: return
         when (val result = CardReader.read(tag)) {
             is CardReader.Result.Success -> vm.onCardNumber(result.pan, mode)
-            is CardReader.Result.Failure -> vm.onCardError(result.message, mode)
+            is CardReader.Result.Failure ->
+                // The card WAS detected, we just couldn't read its number.
+                // With "Accept any tap" on, treat it as the demo card so the demo never stalls.
+                if (vm.state.value.settings.acceptAnyTap) vm.onAnyTap(mode)
+                else vm.onCardError(result.message, mode)
         }
         runOnUiThread { updateReader() }
     }

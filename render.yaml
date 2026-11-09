@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: tapnod-demo
+    runtime: node
+    rootDir: server
+    buildCommand: "echo no build needed"
+    startCommand: node server.js
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: TOKEN_SECRET
+        value: tapnod-demo-secret
