@@ -72,6 +72,10 @@
   .status.bad::before { background: var(--red); }
   input[type=range] { width: 100%; margin-top: 14px; accent-color: var(--ink); }
   .listen { display: none; }
+  .soundbar { position: fixed; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 9;
+    background: var(--lime); color: var(--ink); box-shadow: 0 8px 30px rgba(0,0,0,.25); display: none; }
+  .soundbar.on { display: block; }
+  .err { color: var(--red); font-size: 14px; font-weight: 600; margin-top: 10px; }
   .listen.on { display: block; }
   @media (prefers-reduced-motion: reduce) { .pulse::after { animation: none; } }
 </style>
@@ -99,6 +103,30 @@
   </div>
   <button class="btn-ink" id="start">Start</button>
   <p class="note" id="start-note"></p>
+</section>
+
+<!-- 1b. Fingerprint setup (its own tap, so the browser allows it) -->
+<section class="screen" id="s-finger">
+  <div class="tile ink grow">
+    <div class="eyebrow">Step 1 of 2</div>
+    <div class="big" style="margin-top:16px">Set up your fingerprint</div>
+    <p class="muted" style="margin-top:12px">Your phone will ask you to create a passkey for Tapnod. Confirm with your fingerprint. From then on, every payment needs your finger.</p>
+    <p class="err" id="finger-err"></p>
+  </div>
+  <button class="btn-lime" id="do-finger">Set up fingerprint</button>
+  <button class="btn-ghost" id="skip-finger">Skip for now</button>
+</section>
+
+<!-- 1c. Notifications -->
+<section class="screen" id="s-notify">
+  <div class="tile ink grow">
+    <div class="eyebrow">Step 2 of 2</div>
+    <div class="big" style="margin-top:16px">Turn on notifications</div>
+    <p class="muted" style="margin-top:12px">So your phone alerts you when a shop charges your card, even when this page is closed.</p>
+    <p class="err" id="notify-err"></p>
+  </div>
+  <button class="btn-lime" id="do-notify">Turn on notifications</button>
+  <button class="btn-ghost" id="skip-notify">Skip for now</button>
 </section>
 
 <!-- 2. Waiting -->
@@ -179,6 +207,8 @@
 
   <button class="btn-ink" id="close-settings">Save and close</button>
 </section>
+
+<button class="soundbar" id="soundbar">Tap here to turn on Tapnod's voice</button>
 
 <script>
 const I = window.TapnodI18n;
@@ -284,16 +314,58 @@ function renderVoices() {
   $('st-voice').className = 'status good';
 }
 
+// Chrome only lets a page talk after the person has tapped it, and it can drop speech silently.
+// So we watch for the speech actually starting, and show a big "tap to hear" button if it doesn't.
+let soundUnlocked = false;
+function showSoundHelp() {
+  $('soundbar').classList.add('on');
+  if (current && current.status === 'pending') $('listen').classList.add('on');
+}
+function hideSoundHelp() {
+  $('soundbar').classList.remove('on');
+  $('listen').classList.remove('on');
+}
 function phoneSay(text) {
-  if (!('speechSynthesis' in window)) return;
-  speechSynthesis.cancel();
+  if (!('speechSynthesis' in window)) return showSoundHelp();
   const u = new SpeechSynthesisUtterance(text);
   const all = speechSynthesis.getVoices();
   u.voice = all.find((v) => v.voiceURI === settings.phoneVoice) ||
     all.find((v) => v.lang === 'en-NG') || all.find((v) => v.lang === 'en-GB') || all.find((v) => v.lang.startsWith('en')) || null;
+  if (u.voice) u.lang = u.voice.lang;
   u.rate = Number(settings.speed) || 1;
-  speechSynthesis.speak(u);
+  let started = false;
+  u.onstart = () => { started = true; hideSoundHelp(); };
+  u.onerror = (e) => { if (!started && e.error !== 'interrupted' && e.error !== 'canceled') showSoundHelp(); };
+  if (speechSynthesis.speaking || speechSynthesis.pending) speechSynthesis.cancel();
+  speechSynthesis.resume(); // Chrome sometimes leaves the voice paused
+  // Speaking straight after cancel() can be dropped on Android, so give it a moment.
+  setTimeout(() => speechSynthesis.speak(u), 80);
+  setTimeout(() => { if (!started) showSoundHelp(); }, 2500);
 }
+
+// The first tap anywhere unlocks sound and keeps the screen awake.
+let wakeLock = null;
+async function keepAwake() {
+  try { if ('wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.onrelease = () => { wakeLock = null; }; } } catch {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && started) keepAwake(); });
+function unlockSound() {
+  if (soundUnlocked) return;
+  soundUnlocked = true;
+  if ('speechSynthesis' in window) {
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    speechSynthesis.speak(u);
+  }
+  keepAwake();
+}
+document.addEventListener('pointerdown', unlockSound, { capture: true });
+$('soundbar').onclick = () => {
+  unlockSound();
+  hideSoundHelp();
+  if (current && current.status === 'pending') announce();
+  else phoneSay(I.t(L(), 'sample'));
+};
 
 const player = new Audio();
 player.preload = 'auto';
@@ -306,7 +378,7 @@ async function playUrl(url, fallbackText) {
     await player.play();
     $('listen').classList.remove('on');
   } catch (e) {
-    if (e && e.name === 'NotAllowedError') $('listen').classList.add('on');
+    if (e && e.name === 'NotAllowedError') showSoundHelp();
     else phoneSay(fallbackText);
   }
 }
@@ -334,22 +406,36 @@ async function fingerprintSupported() {
   try { return !!(window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); }
   catch { return false; }
 }
+function inAppBrowser() {
+  return /FBAN|FBAV|Instagram|WhatsApp|Line\/|; wv\)|Snapchat|TikTok/i.test(navigator.userAgent);
+}
+// Must be called straight from a tap: nothing is awaited before create(), or Android may refuse.
 async function setupFingerprint() {
-  if (!(await fingerprintSupported())) return false;
+  if (inAppBrowser()) return { ok: false, error: 'You opened this inside another app. Tap ⋮ and choose "Open in Chrome", then try again.' };
+  if (!window.PublicKeyCredential || !navigator.credentials) return { ok: false, error: 'This browser can\'t use your fingerprint. Open the link in Chrome.' };
+  if (!window.isSecureContext) return { ok: false, error: 'Open the https:// link. Fingerprint only works on https.' };
   try {
     const cred = await navigator.credentials.create({ publicKey: {
       challenge: rand(32), rp: { name: 'Tapnod' },
       user: { id: rand(16), name: CUSTOMER, displayName: customerName },
       pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
       authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
-      timeout: 60000,
+      timeout: 120000,
     }});
     settings.fp = b64.enc(cred.rawId); persist();
-    return true;
-  } catch { return false; }
+    return { ok: true };
+  } catch (e) {
+    const why = {
+      NotAllowedError: 'It was cancelled or timed out. Tap the button again and confirm with your fingerprint.',
+      NotSupportedError: 'This phone can\'t save a passkey yet. In phone Settings, set up a screen lock and fingerprint, then try again.',
+      SecurityError: 'Open the https:// link. Fingerprint only works on https.',
+      InvalidStateError: 'A Tapnod passkey already exists on this phone. Tap again to replace it.',
+    }[e && e.name];
+    return { ok: false, error: why || ('Couldn\'t set it up: ' + (e && (e.name + ' ' + e.message))) };
+  }
 }
 async function checkFingerprint() {
-  if (!settings.fp || !(await fingerprintSupported())) return confirm(I.t(L(), 'approve') + '?');
+  if (!settings.fp) return confirm('Your fingerprint is not set up on this phone. Approve this payment anyway?');
   try {
     await navigator.credentials.get({ publicKey: {
       challenge: rand(32), allowCredentials: [{ type: 'public-key', id: b64.dec(settings.fp) }],
@@ -383,12 +469,17 @@ async function subscribePush() {
   } catch { return false; }
 }
 async function enableNotifications() {
-  if (!('Notification' in window) || !swReg) { $('notify-note').textContent = 'This browser can\'t show notifications. Use Chrome on Android.'; return false; }
-  const perm = await Notification.requestPermission();
-  if (perm !== 'granted') { $('notify-note').textContent = 'Notifications are blocked. Allow them in Chrome site settings.'; renderStatus(); return false; }
-  const ok = await subscribePush();
+  let msg = '';
+  if (inAppBrowser()) msg = 'You opened this inside another app. Open the link in Chrome for notifications.';
+  else if (!('Notification' in window) || !swReg) msg = 'This browser can\'t show notifications. Use Chrome on Android.';
+  else {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') msg = 'Notifications are blocked. In Chrome, tap the lock icon by the address, then Permissions, then allow Notifications.';
+    else if (!(await subscribePush())) msg = 'Allowed, but the phone could not register. Check your internet and try again.';
+  }
+  $('notify-note').textContent = msg;
   renderStatus();
-  return ok;
+  return msg ? msg : true;
 }
 
 function renderStatus() {
@@ -432,21 +523,39 @@ async function boot() {
   renderVoices();
   renderStatus();
   await syncServer();
-  if (started) { subscribePush(); show('s-idle'); }
+  if (started) {
+    subscribePush();
+    show('s-idle');
+    // A reloaded page isn't allowed to talk until it's tapped once.
+    if (!(navigator.userActivation && navigator.userActivation.hasBeenActive)) $('soundbar').classList.add('on');
+  }
 }
 
-$('start').onclick = async () => {
-  $('start').disabled = true;
-  phoneSay(I.t(L(), 'sample')); // this tap unlocks sound in the browser
-  $('start-note').textContent = 'Setting up your fingerprint…';
-  if (!settings.fp) await setupFingerprint();
-  $('start-note').textContent = 'Turning on notifications…';
-  await enableNotifications();
+function goLive() {
   started = true; settings.started = true; persist();
   renderStatus();
-  $('start').disabled = false;
+  keepAwake();
   show('s-idle');
+}
+$('start').onclick = () => {
+  unlockSound();
+  phoneSay(I.t(L(), 'sample')); // proves the voice works, while we have the tap
+  show(settings.fp ? 's-notify' : 's-finger');
 };
+$('do-finger').onclick = async () => {
+  $('finger-err').textContent = '';
+  const r = await setupFingerprint();
+  if (r.ok) show('s-notify');
+  else $('finger-err').textContent = r.error;
+};
+$('skip-finger').onclick = () => show('s-notify');
+$('do-notify').onclick = async () => {
+  $('notify-err').textContent = '';
+  const r = await enableNotifications();
+  if (r === true) goLive();
+  else $('notify-err').textContent = r;
+};
+$('skip-notify').onclick = goLive;
 
 /* ---------- settings screen ---------- */
 $('open-settings').onclick = () => { renderVoices(); renderStatus(); show('s-settings'); };
@@ -455,12 +564,17 @@ $('speed').oninput = (e) => { settings.speed = Number(e.target.value); persist()
 $('test-voice').onclick = () => say(I.t(L(), 'sample'));
 $('enable-notify').onclick = () => enableNotifications();
 $('test-notify').onclick = async () => {
-  await enableNotifications();
+  const on = await enableNotifications();
+  if (on !== true) return;
   const r = await fetch('/api/customer/' + CUSTOMER + '/test-notification', { method: 'POST' });
   const b = await r.json().catch(() => ({}));
   $('notify-note').textContent = r.ok ? 'Sent. Lock your phone to see how it looks.' : (b.message || 'Could not send.');
 };
-$('redo-finger').onclick = async () => { settings.fp = ''; await setupFingerprint(); renderStatus(); };
+$('redo-finger').onclick = async () => {
+  const r = await setupFingerprint();
+  $('set-finger-status').textContent = r.ok ? 'Fingerprint ready' : r.error;
+  if (r.ok) renderStatus();
+};
 
 /* ---------- live updates ---------- */
 async function poll() {
