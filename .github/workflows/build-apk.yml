@@ -1,0 +1,73 @@
+name: Build Tapnod POS APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Build APK
+        id: build
+        shell: bash
+        run: |
+          set +e
+          gradle assembleRelease --stacktrace --no-daemon > build.log 2>&1
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          tail -n 120 build.log
+          exit 0
+
+      - name: Publish build status to the ci-status branch
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p out
+          cp build.log out/build.log || true
+          grep -E "^e: |error:|FAILURE|What went wrong" -A3 build.log > out/errors.txt || true
+          echo "${{ steps.build.outputs.code }}" > out/status.txt
+          echo "${GITHUB_SHA}" > out/commit.txt
+          if [ "${{ steps.build.outputs.code }}" = "0" ]; then
+            cp app/build/outputs/apk/release/app-release.apk out/Tapnod-POS.apk
+          fi
+          cd out
+          git init -q
+          git checkout -q -b ci-status
+          git config user.name "tapnod-ci"
+          git config user.email "tapnod-ci@users.noreply.github.com"
+          git add -A
+          git commit -qm "CI ${GITHUB_SHA::7} exit ${{ steps.build.outputs.code }}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-status
+
+      - name: Publish the APK as a release
+        if: steps.build.outputs.code == '0'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk Tapnod-POS.apk
+          gh release delete pos-latest -y --cleanup-tag || true
+          gh release create pos-latest Tapnod-POS.apk \
+            --title "Tapnod POS (latest build)" \
+            --notes "Open this page on your Android phone, download Tapnod-POS.apk and install it." \
+            --target "${GITHUB_SHA}"
+
+      - name: Fail the run if the build failed
+        if: steps.build.outputs.code != '0'
+        run: exit 1
