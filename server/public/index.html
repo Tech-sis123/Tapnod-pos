@@ -5,56 +5,74 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0B0B0B">
 <title>Tapnod</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="/i18n.js"></script>
 <style>
   :root { --ink:#0B0B0B; --paper:#F2F0EA; --lime:#D4FF3A; --mute:#6B6A66; --line:#D9D6CE; --red:#FF4D3D; --green:#2BD46B; }
   * { box-sizing: border-box; margin: 0; }
-  html, body { height: 100%; }
+  html, body { min-height: 100%; }
   body {
     font-family: Inter, system-ui, -apple-system, sans-serif; background: var(--paper); color: var(--ink);
     padding: 12px; padding-bottom: max(12px, env(safe-area-inset-bottom));
-    display: flex; flex-direction: column; gap: 10px; -webkit-tap-highlight-color: transparent;
+    display: flex; flex-direction: column; gap: 10px; min-height: 100vh; -webkit-tap-highlight-color: transparent;
   }
   .tile { border-radius: 22px; padding: 20px; background: #fff; }
   .ink { background: var(--ink); color: #fff; }
-  .lime { background: var(--lime); color: var(--ink); }
   .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
   .ink .eyebrow { color: var(--lime); }
-  .big { font-size: clamp(44px, 14vw, 72px); font-weight: 800; letter-spacing: -.045em; line-height: .95; }
+  .big { font-size: clamp(40px, 13vw, 68px); font-weight: 800; letter-spacing: -.045em; line-height: .95; }
   .mid { font-size: 26px; font-weight: 800; letter-spacing: -.03em; line-height: 1.05; }
   .muted { color: var(--mute); font-size: 15px; line-height: 1.4; }
   .ink .muted { color: #A9A7A0; }
-  header { display: flex; justify-content: space-between; align-items: flex-end; min-height: 120px; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; min-height: 112px; }
   .logo { font-size: 40px; font-weight: 800; letter-spacing: -.05em; }
   .logo span { color: var(--lime); }
+  .head-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+  .gear { background: #222; color: #fff; border: 0; border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; width: auto; }
   .screen { display: none; flex: 1; flex-direction: column; gap: 10px; }
   .screen.on { display: flex; }
   .grow { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
   button {
-    font: inherit; border: 0; border-radius: 18px; width: 100%; padding: 22px; cursor: pointer;
-    font-size: 19px; font-weight: 800; letter-spacing: -.01em;
+    font: inherit; border: 0; border-radius: 18px; width: 100%; padding: 20px; cursor: pointer;
+    font-size: 18px; font-weight: 800; letter-spacing: -.01em; color: var(--ink);
   }
   button:active { transform: scale(.985); }
-  .btn-lime { background: var(--lime); color: var(--ink); }
+  button:disabled { opacity: .5; }
+  .btn-lime { background: var(--lime); }
   .btn-ink { background: var(--ink); color: #fff; }
-  .btn-ghost { background: transparent; color: var(--ink); border: 2px solid var(--ink); }
+  .btn-ghost { background: transparent; border: 2px solid var(--ink); }
+  .btn-soft { background: var(--paper); font-size: 15px; padding: 14px; }
   .row { display: flex; gap: 10px; }
   .row > * { flex: 1; }
   .pulse { width: 18px; height: 18px; border-radius: 50%; background: var(--lime); position: relative; }
-  .pulse::after {
-    content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--lime);
-    animation: ring 1.6s ease-out infinite;
-  }
+  .pulse::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--lime); animation: ring 1.6s ease-out infinite; }
   @keyframes ring { from { transform: scale(1); opacity: .8 } to { transform: scale(3.2); opacity: 0 } }
   .bar { height: 6px; background: #2A2A2A; border-radius: 6px; overflow: hidden; margin-top: 16px; }
   .bar i { display: block; height: 100%; background: var(--lime); width: 100%; transition: width 1s linear; }
   .result-approved { background: var(--green); }
   .result-declined, .result-expired, .result-cancelled { background: var(--red); color: #fff; }
-  .tag { display: inline-block; padding: 6px 10px; border-radius: 999px; background: var(--paper); font-size: 13px; font-weight: 600; }
-  .ink .tag { background: #222; color: #fff; }
+  .tag { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #222; color: #fff; font-size: 13px; font-weight: 600; }
   .note { font-size: 13px; color: var(--mute); text-align: center; padding: 4px 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chip { width: auto; padding: 12px 16px; font-size: 15px; border-radius: 999px; background: var(--paper); font-weight: 600; }
+  .chip.on { background: var(--ink); color: var(--lime); }
+  .voice { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--paper); margin-top: 8px; font-size: 15px; font-weight: 600; text-align: left; }
+  .voice small { display: block; font-weight: 400; color: var(--mute); font-size: 12px; margin-top: 2px; }
+  .voice.on { background: var(--ink); color: #fff; }
+  .voice.on small { color: #A9A7A0; }
+  .voice .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; flex: none; }
+  .voice.on .dot { background: var(--lime); border-color: var(--lime); }
+  .status { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; margin-top: 10px; }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+  .status.good::before { background: var(--green); }
+  .status.bad::before { background: var(--red); }
+  input[type=range] { width: 100%; margin-top: 14px; accent-color: var(--ink); }
+  .listen { display: none; }
+  .listen.on { display: block; }
   @media (prefers-reduced-motion: reduce) { .pulse::after { animation: none; } }
 </style>
 </head>
@@ -65,244 +83,443 @@
     <div class="eyebrow">Tapnod · Customer</div>
     <div class="logo">tapnod<span>.</span></div>
   </div>
-  <div class="tag" id="who">…</div>
+  <div class="head-right">
+    <button class="gear" id="open-settings" aria-label="Settings">Settings</button>
+    <div class="tag" id="who">…</div>
+  </div>
 </header>
 
-<!-- 1. Start: one tap unlocks voice and sets up the fingerprint -->
+<!-- 1. Start: one tap unlocks voice, fingerprint and notifications -->
 <section class="screen on" id="s-start">
   <div class="tile grow">
     <div class="eyebrow">Welcome</div>
     <div class="mid" style="margin-top:10px" id="hello">Hi.</div>
-    <p class="muted" style="margin-top:10px">Tap start once. Tapnod will read every payment out loud, and you approve with your fingerprint.</p>
+    <p class="muted" style="margin-top:10px">Pick your language, then tap Start. Tapnod reads every payment out loud and sends a notification, and you approve with your fingerprint.</p>
+    <div class="chips" id="start-langs"></div>
   </div>
   <button class="btn-ink" id="start">Start</button>
   <p class="note" id="start-note"></p>
 </section>
 
-<!-- 2. Waiting for a payment -->
+<!-- 2. Waiting -->
 <section class="screen" id="s-idle">
   <div class="tile ink grow">
     <div style="display:flex;align-items:center;gap:14px"><div class="pulse"></div><div class="eyebrow">Live</div></div>
-    <div class="big" style="margin-top:22px">Waiting for a payment</div>
-    <p class="muted" style="margin-top:12px">Keep this page open. When a shop charges your card, it shows up here and Tapnod reads it out.</p>
+    <div class="big" style="margin-top:22px" data-t="waiting">Waiting for a payment</div>
+    <p class="muted" style="margin-top:12px" data-t="waitingBody"></p>
   </div>
-  <div class="tile"><p class="muted" id="fp-status">Fingerprint ready.</p></div>
+  <div class="tile">
+    <div class="status" id="st-notify">Notifications</div><br>
+    <div class="status" id="st-finger">Fingerprint</div><br>
+    <div class="status" id="st-voice">Voice</div>
+  </div>
 </section>
 
-<!-- 3. A payment needs approval -->
+<!-- 3. Payment to approve -->
 <section class="screen" id="s-pending" aria-live="assertive">
   <div class="tile ink">
     <div class="eyebrow" id="p-merchant">Merchant</div>
     <div class="big" style="margin-top:14px" id="p-amount">₦0</div>
-    <p class="muted" style="margin-top:10px" id="p-card">Card</p>
+    <p class="muted" style="margin-top:10px" id="p-text"></p>
+    <p class="muted" style="margin-top:6px" id="p-card"></p>
     <div class="bar"><i id="p-bar"></i></div>
     <p class="muted" style="margin-top:8px" id="p-left"></p>
   </div>
   <div class="grow"></div>
-  <button class="btn-lime" id="approve">Approve with fingerprint</button>
+  <button class="btn-soft listen" id="listen" data-t="tapToListen">Tap to listen</button>
+  <button class="btn-lime" id="approve" data-t="approve">Approve with fingerprint</button>
   <div class="row">
-    <button class="btn-ghost" id="repeat">Repeat</button>
-    <button class="btn-ghost" id="decline">Decline</button>
+    <button class="btn-ghost" id="repeat" data-t="repeat">Repeat</button>
+    <button class="btn-ghost" id="decline" data-t="decline">Decline</button>
   </div>
 </section>
 
 <!-- 4. Result -->
 <section class="screen" id="s-result" aria-live="assertive">
   <div class="tile grow" id="r-tile">
-    <div class="eyebrow" id="r-eyebrow">Result</div>
-    <div class="big" style="margin-top:14px" id="r-title">Approved</div>
-    <p style="margin-top:12px;font-size:16px" id="r-body"></p>
+    <div class="big" id="r-title">Approved</div>
+    <p style="margin-top:12px;font-size:17px;line-height:1.4" id="r-body"></p>
   </div>
-  <button class="btn-ink" id="done">Done</button>
+  <button class="btn-ink" id="done" data-t="done">Done</button>
+</section>
+
+<!-- 5. Settings -->
+<section class="screen" id="s-settings">
+  <div class="tile">
+    <div class="eyebrow">Language</div>
+    <p class="muted" style="margin-top:6px">Screen, voice and notifications all use this language.</p>
+    <div class="chips" id="set-langs"></div>
+  </div>
+
+  <div class="tile">
+    <div class="eyebrow">Voice</div>
+    <p class="muted" style="margin-top:6px" id="voice-help"></p>
+    <div id="ng-voices"></div>
+    <div id="phone-voices"></div>
+    <div class="eyebrow" style="margin-top:18px">Speed</div>
+    <input type="range" id="speed" min="0.7" max="1.3" step="0.05" aria-label="Voice speed">
+    <button class="btn-soft" style="margin-top:12px" id="test-voice">Play a sample</button>
+  </div>
+
+  <div class="tile">
+    <div class="eyebrow">Notifications</div>
+    <div class="status" id="set-notify-status">Off</div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn-soft" id="enable-notify">Turn on</button>
+      <button class="btn-soft" id="test-notify">Send a test</button>
+    </div>
+    <p class="note" id="notify-note"></p>
+  </div>
+
+  <div class="tile">
+    <div class="eyebrow">Fingerprint</div>
+    <div class="status" id="set-finger-status">Not set up</div>
+    <button class="btn-soft" style="margin-top:12px" id="redo-finger">Set up fingerprint</button>
+  </div>
+
+  <button class="btn-ink" id="close-settings">Save and close</button>
 </section>
 
 <script>
+const I = window.TapnodI18n;
 const params = new URLSearchParams(location.search);
 const CUSTOMER = params.get('c') || 'cus_amaka';
-const FP_KEY = 'tapnod_fp_' + CUSTOMER;
-
-let customerName = 'there';
-let current = null;        // request currently on screen
-let shownResultFor = null; // request id whose result we already showed
-let started = false;
-
+const STORE = 'tapnod_' + CUSTOMER;
 const $ = (id) => document.getElementById(id);
+
+/* ---------- saved settings (on this phone, and sent to the server) ---------- */
+const saved = JSON.parse(localStorage.getItem(STORE) || '{}');
+const settings = Object.assign({ lang: 'en', source: 'auto', voice: '', phoneVoice: '', speed: 1, fp: '' }, saved);
+function persist() {
+  localStorage.setItem(STORE, JSON.stringify(settings));
+  syncServer();
+}
+
+let config = { push_public_key: '', nigerian_voices: false };
+let customerName = 'there';
+let current = null;
+let shownResultFor = null;
+let started = Boolean(saved.started);
+let lastScreen = 's-idle';
+const L = () => settings.lang;
+const useNigerian = () => config.nigerian_voices && settings.source !== 'phone';
+
 function show(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.id === id));
+  if (id !== 's-settings') lastScreen = id;
 }
 
-/* ---------- money in words, so the voice says "fifteen thousand naira" ---------- */
-const ONES = ['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve',
-  'thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
-const TENS = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
-function under1000(n) {
-  const parts = [];
-  if (n >= 100) { parts.push(ONES[Math.floor(n / 100)] + ' hundred'); n %= 100; if (n) parts.push('and'); }
-  if (n >= 20) { parts.push(TENS[Math.floor(n / 10)] + (n % 10 ? '-' + ONES[n % 10] : '')); }
-  else if (n > 0 || !parts.length) parts.push(ONES[n]);
-  return parts.join(' ');
+function applyLanguage() {
+  document.documentElement.lang = L() === 'pcm' ? 'en' : L();
+  document.querySelectorAll('[data-t]').forEach((el) => { el.textContent = I.t(L(), el.dataset.t); });
+  if (current && current.status === 'pending') { $('p-text').textContent = I.sayFor(L(), 'pending', current).shown; updateCountdown(); }
+  renderLangChips();
 }
-function words(n) {
-  if (n === 0) return 'zero';
-  const scales = [[1e9, 'billion'], [1e6, 'million'], [1e3, 'thousand']];
-  const out = [];
-  for (const [v, name] of scales) {
-    if (n >= v) { out.push(under1000(Math.floor(n / v)) + ' ' + name); n %= v; }
+
+function renderLangChips() {
+  for (const box of [$('start-langs'), $('set-langs')]) {
+    box.innerHTML = '';
+    for (const [code, l] of Object.entries(I.LANGS)) {
+      const b = document.createElement('button');
+      b.className = 'chip' + (code === L() ? ' on' : '');
+      b.textContent = l.name;
+      b.setAttribute('aria-pressed', code === L());
+      b.onclick = () => { settings.lang = code; persist(); applyLanguage(); renderVoices(); };
+      box.appendChild(b);
+    }
   }
-  if (n) out.push((out.length && n < 100 ? 'and ' : '') + under1000(n));
-  return out.join(' ');
-}
-function moneyWords(kobo) {
-  const naira = Math.floor(kobo / 100), k = kobo % 100;
-  let s = words(naira) + ' naira';
-  if (k) s += ' ' + words(k) + ' kobo';
-  return s;
-}
-function moneyText(kobo) {
-  return '₦' + (kobo / 100).toLocaleString('en-NG', { minimumFractionDigits: kobo % 100 ? 2 : 0 });
 }
 
-/* ---------- voice ---------- */
-let voice = null;
-function pickVoice() {
-  const vs = speechSynthesis.getVoices();
-  voice = vs.find((v) => v.lang === 'en-NG') || vs.find((v) => v.lang === 'en-GB') ||
-          vs.find((v) => v.lang.startsWith('en')) || null;
+/* ---------- voices ---------- */
+let phoneVoices = [];
+let ngVoices = [];
+function loadPhoneVoices() {
+  if (!('speechSynthesis' in window)) return;
+  phoneVoices = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith('en') || /^(yo|ig|ha)/i.test(v.lang));
+  phoneVoices.sort((a, b) => (b.lang === 'en-NG') - (a.lang === 'en-NG'));
+  renderVoices();
 }
-if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
-function say(text) {
+if ('speechSynthesis' in window) { loadPhoneVoices(); speechSynthesis.onvoiceschanged = loadPhoneVoices; }
+
+function voiceRow(label, sub, on, onPick) {
+  const b = document.createElement('button');
+  b.className = 'voice' + (on ? ' on' : '');
+  b.innerHTML = '<span></span><i class="dot"></i>';
+  b.firstChild.textContent = label;
+  if (sub) { const s = document.createElement('small'); s.textContent = sub; b.firstChild.appendChild(s); }
+  b.setAttribute('aria-pressed', on);
+  b.onclick = onPick;
+  return b;
+}
+
+function renderVoices() {
+  const ng = $('ng-voices'), ph = $('phone-voices');
+  ng.innerHTML = ''; ph.innerHTML = '';
+  if (config.nigerian_voices) {
+    $('voice-help').textContent = 'Nigerian voices speak English, Pidgin, Yorùbá, Igbo and Hausa properly. Phone voices only sound right in English.';
+    const head = document.createElement('div'); head.className = 'eyebrow'; head.style.marginTop = '14px'; head.textContent = 'Nigerian voices';
+    ng.appendChild(head);
+    const list = ngVoices.length ? ngVoices : [{ id: '', name: 'Default Nigerian voice' }];
+    // No voice picked yet = YarnGPT's default voice (the one marked default, else the first).
+    const fallbackId = (list.find((v) => v.default) || list[0]).id;
+    for (const v of list) {
+      const langs = Array.isArray(v.languages) ? v.languages.join(', ') : v.languages;
+      ng.appendChild(voiceRow(v.name, [v.gender, langs, v.description].filter(Boolean).join(' · '),
+        useNigerian() && (settings.voice || fallbackId) === v.id,
+        () => { settings.source = 'nigerian'; settings.voice = v.id; persist(); renderVoices(); }));
+    }
+  } else {
+    $('voice-help').textContent = 'Nigerian voices are not switched on for this demo yet, so Tapnod uses your phone\'s voice. Phones mostly ship UK and US voices.';
+  }
+  const head = document.createElement('div'); head.className = 'eyebrow'; head.style.marginTop = '14px'; head.textContent = 'Phone voices';
+  ph.appendChild(head);
+  ph.appendChild(voiceRow('Automatic', 'Best voice on this phone', !useNigerian() && !settings.phoneVoice,
+    () => { settings.source = 'phone'; settings.phoneVoice = ''; persist(); renderVoices(); }));
+  for (const v of phoneVoices) {
+    ph.appendChild(voiceRow(v.name, v.lang, !useNigerian() && settings.phoneVoice === v.voiceURI,
+      () => { settings.source = 'phone'; settings.phoneVoice = v.voiceURI; persist(); renderVoices(); }));
+  }
+  $('speed').value = settings.speed;
+  $('st-voice').textContent = useNigerian() ? 'Nigerian voice' : 'Phone voice';
+  $('st-voice').className = 'status good';
+}
+
+function phoneSay(text) {
   if (!('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  if (voice) u.voice = voice;
-  u.rate = 0.95;
+  const all = speechSynthesis.getVoices();
+  u.voice = all.find((v) => v.voiceURI === settings.phoneVoice) ||
+    all.find((v) => v.lang === 'en-NG') || all.find((v) => v.lang === 'en-GB') || all.find((v) => v.lang.startsWith('en')) || null;
+  u.rate = Number(settings.speed) || 1;
   speechSynthesis.speak(u);
 }
-function buzz(pattern) { if (navigator.vibrate) navigator.vibrate(pattern); }
 
-/* ---------- fingerprint (WebAuthn passkey on this phone) ---------- */
+const player = new Audio();
+player.preload = 'auto';
+// Plays audio from the server, falls back to the phone voice. Shows "Tap to listen" if the browser blocks sound.
+async function playUrl(url, fallbackText) {
+  try {
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    player.src = url;
+    player.playbackRate = Number(settings.speed) || 1;
+    await player.play();
+    $('listen').classList.remove('on');
+  } catch (e) {
+    if (e && e.name === 'NotAllowedError') $('listen').classList.add('on');
+    else phoneSay(fallbackText);
+  }
+}
+
+// Speaks any sentence in the chosen voice.
+async function say(text) {
+  if (!useNigerian()) return phoneSay(text);
+  try {
+    const r = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, voice: settings.voice }) });
+    const b = await r.json();
+    if (r.ok && b.audio_url) return playUrl(b.audio_url, text);
+  } catch {}
+  phoneSay(text);
+}
+
+function buzz(p) { if (navigator.vibrate) navigator.vibrate(p); }
+
+/* ---------- fingerprint (a passkey on this phone) ---------- */
 const b64 = {
   enc: (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
   dec: (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)),
 };
 const rand = (n) => crypto.getRandomValues(new Uint8Array(n));
-let fpAvailable = false;
-
 async function fingerprintSupported() {
+  try { return !!(window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); }
+  catch { return false; }
+}
+async function setupFingerprint() {
+  if (!(await fingerprintSupported())) return false;
   try {
-    return !!(window.PublicKeyCredential &&
-      await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
+    const cred = await navigator.credentials.create({ publicKey: {
+      challenge: rand(32), rp: { name: 'Tapnod' },
+      user: { id: rand(16), name: CUSTOMER, displayName: customerName },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
+      timeout: 60000,
+    }});
+    settings.fp = b64.enc(cred.rawId); persist();
+    return true;
   } catch { return false; }
 }
-
-async function registerFingerprint() {
-  const cred = await navigator.credentials.create({ publicKey: {
-    challenge: rand(32),
-    rp: { name: 'Tapnod' },
-    user: { id: rand(16), name: CUSTOMER, displayName: customerName },
-    pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
-    authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
-    timeout: 60000,
-  }});
-  localStorage.setItem(FP_KEY, b64.enc(cred.rawId));
-}
-
-// Resolves true only if the phone confirmed the owner's fingerprint (or screen lock).
 async function checkFingerprint() {
-  const id = localStorage.getItem(FP_KEY);
-  if (!fpAvailable || !id) return confirm('Fingerprint is not available in this browser. Approve this payment?');
+  if (!settings.fp || !(await fingerprintSupported())) return confirm(I.t(L(), 'approve') + '?');
   try {
     await navigator.credentials.get({ publicKey: {
-      challenge: rand(32),
-      allowCredentials: [{ type: 'public-key', id: b64.dec(id) }],
-      userVerification: 'required',
-      timeout: 60000,
+      challenge: rand(32), allowCredentials: [{ type: 'public-key', id: b64.dec(settings.fp) }],
+      userVerification: 'required', timeout: 60000,
     }});
     return true;
   } catch { return false; }
 }
 
+/* ---------- notifications ---------- */
+function keyBytes(b64url) { return b64.dec(b64url); }
+let swReg = null;
+async function registerWorker() {
+  if (!('serviceWorker' in navigator)) return null;
+  try { swReg = await navigator.serviceWorker.register('/sw.js', { scope: '/' }); } catch { swReg = null; }
+  return swReg;
+}
+async function subscribePush() {
+  if (!swReg || !('PushManager' in window) || !config.push_public_key) return false;
+  if (Notification.permission !== 'granted') return false;
+  try {
+    let sub = await swReg.pushManager.getSubscription();
+    const want = config.push_public_key;
+    if (sub && sub.options && sub.options.applicationServerKey &&
+        b64.enc(sub.options.applicationServerKey) !== want) { await sub.unsubscribe(); sub = null; }
+    if (!sub) sub = await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(want) });
+    await fetch('/api/customer/' + CUSTOMER + '/subscribe', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON() }),
+    });
+    return true;
+  } catch { return false; }
+}
+async function enableNotifications() {
+  if (!('Notification' in window) || !swReg) { $('notify-note').textContent = 'This browser can\'t show notifications. Use Chrome on Android.'; return false; }
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') { $('notify-note').textContent = 'Notifications are blocked. Allow them in Chrome site settings.'; renderStatus(); return false; }
+  const ok = await subscribePush();
+  renderStatus();
+  return ok;
+}
+
+function renderStatus() {
+  const n = 'Notification' in window ? Notification.permission : 'unsupported';
+  const notifyOn = n === 'granted';
+  for (const el of [$('st-notify'), $('set-notify-status')]) {
+    el.textContent = notifyOn ? 'Notifications on' : n === 'denied' ? 'Notifications blocked' : 'Notifications off';
+    el.className = 'status ' + (notifyOn ? 'good' : 'bad');
+  }
+  const fpOn = Boolean(settings.fp);
+  for (const el of [$('st-finger'), $('set-finger-status')]) {
+    el.textContent = fpOn ? 'Fingerprint ready' : 'Fingerprint not set up (on-screen confirm)';
+    el.className = 'status ' + (fpOn ? 'good' : 'bad');
+  }
+}
+
+// Keeps the server in step with this phone (it forgets everything when it restarts).
+async function syncServer() {
+  try {
+    await fetch('/api/customer/' + CUSTOMER + '/prefs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lang: settings.lang, voice: useNigerian() ? settings.voice : '' }),
+    });
+  } catch {}
+}
+
 /* ---------- start ---------- */
-async function loadCustomer() {
+async function boot() {
+  try { config = await (await fetch('/api/config')).json(); } catch {}
   try {
     const r = await fetch('/api/customer/' + CUSTOMER);
     if (r.ok) customerName = (await r.json()).name;
   } catch {}
-  const first = customerName.split(' ')[0];
   $('who').textContent = customerName;
-  $('hello').textContent = 'Hi ' + first + '.';
+  $('hello').textContent = 'Hi ' + customerName.split(' ')[0] + '.';
+  if (config.nigerian_voices) {
+    try { ngVoices = (await (await fetch('/api/voices')).json()).voices || []; } catch {}
+  }
+  await registerWorker();
+  applyLanguage();
+  renderVoices();
+  renderStatus();
+  await syncServer();
+  if (started) { subscribePush(); show('s-idle'); }
 }
 
 $('start').onclick = async () => {
-  // This tap is the "user gesture" browsers need before they allow speech.
-  say('Tapnod is on. I will read your payments to you.');
-  fpAvailable = await fingerprintSupported();
-  if (fpAvailable && !localStorage.getItem(FP_KEY)) {
-    $('start-note').textContent = 'Setting up your fingerprint…';
-    try { await registerFingerprint(); }
-    catch { fpAvailable = false; }
-  }
-  $('fp-status').textContent = fpAvailable && localStorage.getItem(FP_KEY)
-    ? 'Fingerprint ready. Payments need your fingerprint.'
-    : 'Fingerprint not available here, so you will confirm on screen. Use Chrome on Android over https.';
-  started = true;
+  $('start').disabled = true;
+  phoneSay(I.t(L(), 'sample')); // this tap unlocks sound in the browser
+  $('start-note').textContent = 'Setting up your fingerprint…';
+  if (!settings.fp) await setupFingerprint();
+  $('start-note').textContent = 'Turning on notifications…';
+  await enableNotifications();
+  started = true; settings.started = true; persist();
+  renderStatus();
+  $('start').disabled = false;
   show('s-idle');
 };
 
-/* ---------- live updates (polls once a second) ---------- */
+/* ---------- settings screen ---------- */
+$('open-settings').onclick = () => { renderVoices(); renderStatus(); show('s-settings'); };
+$('close-settings').onclick = () => { persist(); show(started ? (current && current.status === 'pending' ? 's-pending' : 's-idle') : 's-start'); };
+$('speed').oninput = (e) => { settings.speed = Number(e.target.value); persist(); };
+$('test-voice').onclick = () => say(I.t(L(), 'sample'));
+$('enable-notify').onclick = () => enableNotifications();
+$('test-notify').onclick = async () => {
+  await enableNotifications();
+  const r = await fetch('/api/customer/' + CUSTOMER + '/test-notification', { method: 'POST' });
+  const b = await r.json().catch(() => ({}));
+  $('notify-note').textContent = r.ok ? 'Sent. Lock your phone to see how it looks.' : (b.message || 'Could not send.');
+};
+$('redo-finger').onclick = async () => { settings.fp = ''; await setupFingerprint(); renderStatus(); };
+
+/* ---------- live updates ---------- */
 async function poll() {
   if (!started) return;
   let req = null;
-  try {
-    const r = await fetch('/api/customer/' + CUSTOMER + '/latest', { cache: 'no-store' });
-    req = (await r.json()).request;
-  } catch { return; } // offline for a moment, try again next tick
+  try { req = (await (await fetch('/api/customer/' + CUSTOMER + '/latest', { cache: 'no-store' })).json()).request; }
+  catch { return; }
   if (!req) return;
-
   if (req.status === 'pending') {
     if (!current || current.request_id !== req.request_id) showPending(req);
-    else current = req;
+    else {
+      const gotAudio = !current.audio_url && req.audio_url;
+      current = req;
+      if (gotAudio && waitingForAudio) { waitingForAudio = false; announce(); }
+    }
     updateCountdown();
     return;
   }
-  // Finished: show the result once (approved from here, or cancelled/expired on the POS side).
-  if (current && current.request_id === req.request_id && shownResultFor !== req.request_id) {
-    showResult(req);
-  }
+  if (current && current.request_id === req.request_id && shownResultFor !== req.request_id) showResult(req);
 }
 
+let waitingForAudio = false;
 function showPending(req) {
   current = req;
   $('p-merchant').textContent = req.merchant_name;
-  $('p-amount').textContent = moneyText(req.amount_kobo);
-  $('p-card').textContent = (req.card_scheme || 'Card') + ' ending ' + (req.card_last4 || '····');
-  show('s-pending');
-  buzz([200, 100, 200]);
-  announce(req);
+  $('p-amount').textContent = I.moneyText(req.amount_kobo);
+  $('p-text').textContent = I.sayFor(L(), 'pending', req).shown;
+  $('p-card').textContent = (req.card_scheme || 'Card') + ' ···· ' + (req.card_last4 || '');
+  $('listen').classList.remove('on');
+  if ($('s-settings').classList.contains('on')) lastScreen = 's-pending'; else show('s-pending');
+  buzz([200, 100, 200, 100, 200]);
+  // The Nigerian voice is made on the server; give it a few seconds, then fall back to the phone voice.
+  if (useNigerian() && !req.audio_url) {
+    waitingForAudio = true;
+    setTimeout(() => { if (waitingForAudio && current && current.request_id === req.request_id) { waitingForAudio = false; announce(); } }, 6000);
+  } else announce();
 }
 
-function announce(req) {
-  say(req.merchant_name + ' is asking you to pay ' + moneyWords(req.amount_kobo) +
-      '. Touch Approve, then your fingerprint, to pay. Or touch Decline.');
+function announce() {
+  if (!current) return;
+  const text = I.sayFor(L(), 'pending', current).spoken;
+  if (useNigerian() && current.audio_url) playUrl(current.audio_url, text);
+  else phoneSay(text);
 }
 
 function updateCountdown() {
   if (!current) return;
   const left = Math.max(0, current.expires_at_ms - Date.now());
   $('p-bar').style.width = (left / 120000 * 100) + '%';
-  $('p-left').textContent = Math.ceil(left / 1000) + ' seconds left';
+  $('p-left').textContent = I.t(L(), 'secondsLeft', { n: Math.ceil(left / 1000) });
 }
 
 async function answer(action) {
   if (!current) return;
-  const id = current.request_id;
   try {
-    const r = await fetch('/api/customer/requests/' + id + '/' + action, { method: 'POST' });
-    const body = await r.json();
-    showResult(body.request || { ...current, status: action === 'approve' ? 'approved' : 'declined' });
-  } catch {
-    say('Network problem. Try again.');
-  }
+    const r = await fetch('/api/customer/requests/' + current.request_id + '/' + action, { method: 'POST' });
+    const b = await r.json();
+    showResult(b.request || { ...current, status: action === 'approve' ? 'approved' : 'declined' });
+  } catch { phoneSay('Network problem. Try again.'); }
 }
 
 $('approve').onclick = async () => {
@@ -310,39 +527,36 @@ $('approve').onclick = async () => {
   const ok = await checkFingerprint();
   $('approve').disabled = false;
   if (ok) answer('approve');
-  else say('Fingerprint not confirmed. Try again, or touch Decline.');
 };
 $('decline').onclick = () => answer('decline');
-$('repeat').onclick = () => current && announce(current);
+$('repeat').onclick = () => announce();
+$('listen').onclick = () => { $('listen').classList.remove('on'); announce(); };
 
 function showResult(req) {
   shownResultFor = req.request_id;
-  const t = $('r-tile');
-  t.className = 'tile grow result-' + req.status;
-  const amount = moneyText(req.amount_kobo);
-  const texts = {
-    approved: ['Paid', 'Approved', amount + ' to ' + req.merchant_name + '. Reference ' + req.reference + '.',
-      'Payment approved. You paid ' + moneyWords(req.amount_kobo) + ' to ' + req.merchant_name + '.'],
-    declined: ['Stopped', 'Declined', 'You declined ' + amount + ' to ' + req.merchant_name + '. No money left your account.',
-      'Payment declined. No money left your account.'],
-    expired: ['Timed out', 'Expired', 'The payment to ' + req.merchant_name + ' timed out. No money left your account.',
-      'The payment timed out. No money left your account.'],
-    cancelled: ['Cancelled', 'Cancelled', req.merchant_name + ' cancelled this payment. No money left your account.',
-      'The shop cancelled this payment.'],
-  }[req.status] || ['Update', req.status, '', ''];
-  $('r-eyebrow').textContent = texts[0];
-  $('r-title').textContent = texts[1];
-  $('r-body').textContent = texts[2];
+  waitingForAudio = false;
+  const titles = { approved: 'paid', declined: 'stopped', expired: 'timedOut', cancelled: 'cancelledTitle' };
+  $('r-tile').className = 'tile grow result-' + req.status;
+  $('r-title').textContent = I.t(L(), titles[req.status] || 'paid');
+  const words = I.sayFor(L(), req.status, req);
+  $('r-body').textContent = words.shown + (req.status === 'approved' ? ' · ' + req.reference : '');
   show('s-result');
   buzz(req.status === 'approved' ? [80] : [300]);
-  say(texts[3]);
+  say(words.spoken);
 }
-
 $('done').onclick = () => { current = null; show('s-idle'); };
 
-loadCustomer();
+// A push arrived while the page is open: check straight away instead of waiting for the next poll.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data && (e.data.type === 'tapnod-push' || e.data.type === 'tapnod-open')) poll();
+  });
+}
+
+boot();
 setInterval(poll, 1000);
 setInterval(updateCountdown, 1000);
+setInterval(() => { syncServer(); subscribePush(); }, 60000); // heals a server restart
 </script>
 </body>
 </html>

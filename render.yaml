@@ -10,3 +10,12 @@ services:
     envVars:
       - key: TOKEN_SECRET
         value: tapnod-demo-secret
+      # Keeps phone notifications working across restarts. Render makes a random value once.
+      - key: VAPID_SECRET
+        generateValue: true
+      # Demo shortcut: any unknown card is linked to Amaka on first use. Set to empty to disable.
+      - key: DEMO_AUTO_LINK
+        value: cus_amaka
+      # Nigerian voices. Paste your key from yarngpt.ai in the Render dashboard.
+      - key: YARNGPT_API_KEY
+        sync: false
