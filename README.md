@@ -92,6 +92,40 @@ For link-card mode.
 
 Errors can return `{ "message": "..." }` and the POS shows that message.
 
+## Customer web app and demo backend (`server/`)
+
+The customer side is a web page, served by a tiny backend in `server/` (plain Node, no dependencies). One deploy gives you both the API the POS talks to and the page the customer opens.
+
+**Flow:** POS detects the tap, then `POST /api/pos/requests`. The customer page checks every second, vibrates, reads the amount aloud ("Bisi Ventures is asking you to pay fifteen thousand naira"), and the customer approves with her fingerprint. The POS sees `approved` on its next poll and says "Payment approved".
+
+### Run it
+
+```bash
+cd server
+node server.js          # http://localhost:3000
+```
+
+### Deploy (free) on Render
+
+1. render.com, **New > Blueprint**, pick this repo. It reads `render.yaml`.
+2. You get a link like `https://tapnod-demo.onrender.com`.
+3. POS: Settings, turn **Simulator** off, Backend URL = that link.
+4. Customer phone: open `https://tapnod-demo.onrender.com/?c=cus_amaka` in Chrome, tap **Start**, and set up the fingerprint once.
+
+The free plan sleeps after 15 idle minutes and takes about a minute to wake. Open the customer page a few minutes before the demo; its polling keeps the server awake.
+
+### Notes
+
+- The demo card (the one "Simulate tap" and "Accept any tap" use) is linked to Amaka automatically on start, so no Link card step is needed after a restart. Cards linked with **Link card** live in memory and reset when the server restarts.
+- `TOKEN_SECRET` must match **Card token secret** in the POS settings. Both default to `tapnod-demo-secret`.
+- Fingerprint uses WebAuthn (a passkey on the phone). It needs https, so it works on Render, not on a plain `http://192.168...` address. Without it the page asks for an on-screen confirmation instead.
+- Demo shortcut: the fingerprint check happens on the phone and is not verified by the server. In production the server would issue the challenge and verify the signed response.
+- Customer endpoints: `GET /api/customer/{id}`, `GET /api/customer/{id}/latest`, `POST /api/customer/requests/{request_id}/approve` and `/decline`.
+
+## Accept any tap
+
+Settings has **Accept any tap** (on by default). If a card touches the phone but its number can't be read (some Verve cards, a card pulled away too fast, an NFC sticker), the tap still counts as the demo card instead of showing "Card not read". Turn it off to show strict real-card reading.
+
 ## Card reading
 
 Chrome's Web NFC only reads NFC tags, not bank cards, which is why the POS is a native app. Card reading uses Android `IsoDep` and the open-source [EMV-NFC-Paycard-Enrollment](https://github.com/devnied/EMV-NFC-Paycard-Enrollment) library. Visa and Mastercard read most reliably. Test your exact card early.
@@ -110,6 +144,10 @@ app/src/main/java/ng/tapnod/pos/
   util/                  Money words, card token, voice and tones
   ui/Theme.kt            Swiss palette, Inter, bento Tile
   ui/Screens.kt          Every screen
+
+server/
+  server.js              Demo backend (POS + customer API)
+  public/index.html      Customer web app
 ```
 
 Inter font: SIL Open Font License (see `INTER_LICENSE.txt`).
