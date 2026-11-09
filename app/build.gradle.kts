@@ -12,15 +12,25 @@ android {
         applicationId = "ng.tapnod.pos"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
+    }
+
+    signingConfigs {
+        // Demo-only key kept in the repo so every build has the same signature
+        // and new APKs install over the old one without uninstalling.
+        create("demo") {
+            storeFile = file("tapnod-demo.jks")
+            storePassword = "tapnod-demo"
+            keyAlias = "tapnod"
+            keyPassword = "tapnod-demo"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Signed with the debug key so the APK installs straight from a download.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("demo")
         }
     }
 

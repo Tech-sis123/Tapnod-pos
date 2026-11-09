@@ -8,10 +8,20 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.speech.tts.TextToSpeech
+import android.speech.tts.Voice
 import java.util.Locale
 
-/** Speaks results out loud on the POS and plays short confirmation tones. */
-class Speaker(context: Context) : TextToSpeech.OnInitListener {
+/**
+ * Speaks results out loud on the POS and plays short confirmation tones.
+ * Picks a Nigerian English voice when the phone has one installed, and the best-quality voice otherwise.
+ */
+class Speaker(
+    context: Context,
+    private val preferredVoice: String,
+    private val onReady: () -> Unit
+) : TextToSpeech.OnInitListener {
+
+    data class VoiceOption(val name: String, val label: String, val nigerian: Boolean)
 
     private val tts = TextToSpeech(context.applicationContext, this)
     private var ready = false
@@ -30,15 +40,61 @@ class Speaker(context: Context) : TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status != TextToSpeech.SUCCESS) return
-        val nigeria = Locale("en", "NG")
-        val result = tts.setLanguage(nigeria)
-        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-            tts.setLanguage(Locale.UK)
-        }
-        tts.setSpeechRate(0.95f)
         ready = true
+        val options = options()
+        val chosen = options.firstOrNull { it.name == preferredVoice } ?: options.firstOrNull()
+        if (chosen == null || !useVoice(chosen.name)) {
+            val r = tts.setLanguage(Locale("en", "NG"))
+            if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) {
+                tts.setLanguage(Locale.UK)
+            }
+        }
+        // A touch slower and lower than default sounds less like a robot announcing a train.
+        tts.setSpeechRate(0.9f)
+        tts.setPitch(0.96f)
+        onReady()
         queued?.let { speak(it) }
         queued = null
+    }
+
+    /** English voices installed on this phone, Nigerian first, then by quality. */
+    fun options(): List<VoiceOption> {
+        if (!ready) return emptyList()
+        val all: Set<Voice> = runCatching { tts.voices }.getOrNull() ?: emptySet()
+        return all
+            .filter { v ->
+                v.locale.language == "en" &&
+                    !(v.features ?: emptySet()).contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)
+            }
+            .sortedWith(
+                compareByDescending<Voice> { it.locale.country == "NG" }
+                    .thenByDescending { it.quality }
+                    .thenBy { it.isNetworkConnectionRequired }
+                    .thenBy { it.name }
+            )
+            .map { VoiceOption(it.name, label(it), it.locale.country == "NG") }
+    }
+
+    fun current(): VoiceOption? {
+        if (!ready) return null
+        val v = runCatching { tts.voice }.getOrNull() ?: return null
+        return VoiceOption(v.name, label(v), v.locale.country == "NG")
+    }
+
+    fun useVoice(name: String): Boolean {
+        val v = runCatching { tts.voices }.getOrNull()?.firstOrNull { it.name == name } ?: return false
+        return tts.setVoice(v) == TextToSpeech.SUCCESS
+    }
+
+    private fun label(v: Voice): String {
+        val accent = if (v.locale.country == "NG") "Nigerian English" else v.locale.getDisplayName(Locale.UK)
+        val quality = when {
+            v.quality >= Voice.QUALITY_VERY_HIGH -> "very high quality"
+            v.quality >= Voice.QUALITY_HIGH -> "high quality"
+            else -> "normal quality"
+        }
+        val net = if (v.isNetworkConnectionRequired) "needs internet" else "works offline"
+        return "$accent · $quality · $net"
     }
 
     fun speak(text: String) {

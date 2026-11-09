@@ -19,6 +19,12 @@ class SettingsStore(context: Context) {
         voice = prefs.getBoolean("voice", true)
     )
 
+    var voiceName: String
+        get() = prefs.getString("voice_name", "") ?: ""
+        set(value) {
+            prefs.edit().putString("voice_name", value).apply()
+        }
+
     fun save(s: PosSettings) {
         prefs.edit()
             .putBoolean("simulator", s.simulator)

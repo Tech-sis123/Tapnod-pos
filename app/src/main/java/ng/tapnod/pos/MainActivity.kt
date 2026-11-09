@@ -46,7 +46,8 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
                 TapnodApp(
                     state = state,
                     vm = vm,
-                    onOpenNfcSettings = { openNfcSettings() }
+                    onOpenNfcSettings = { openNfcSettings() },
+                    onOpenTtsSettings = { openTtsSettings() }
                 )
             }
         }
@@ -101,6 +102,16 @@ class MainActivity : ComponentActivity(), NfcAdapter.ReaderCallback {
             is CardReader.Result.Failure -> vm.onCardError(result.message, mode)
         }
         runOnUiThread { updateReader() }
+    }
+
+    /** Android's text-to-speech settings, where the Nigerian English voice can be installed. */
+    private fun openTtsSettings() {
+        runCatching { startActivity(Intent("com.android.settings.TTS_SETTINGS")) }
+            .onFailure {
+                runCatching {
+                    startActivity(Intent(android.speech.tts.TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))
+                }
+            }
     }
 
     private fun openNfcSettings() {

@@ -89,7 +89,12 @@ import java.util.Locale
 /* ================================================================== */
 
 @Composable
-fun TapnodApp(state: UiState, vm: PosViewModel, onOpenNfcSettings: () -> Unit) {
+fun TapnodApp(
+    state: UiState,
+    vm: PosViewModel,
+    onOpenNfcSettings: () -> Unit,
+    onOpenTtsSettings: () -> Unit
+) {
     BackHandler(enabled = state.screen !is Screen.Amount) {
         when (state.screen) {
             is Screen.Waiting -> vm.cancelWaiting()
@@ -125,7 +130,7 @@ fun TapnodApp(state: UiState, vm: PosViewModel, onOpenNfcSettings: () -> Unit) {
                 is Screen.LinkPick -> LinkPickScreen(state, vm)
                 is Screen.LinkDone -> LinkDoneScreen(vm, screen.customer, screen.card)
                 is Screen.Failure -> FailureScreen(vm, screen.title, screen.message, screen.retry)
-                is Screen.Settings -> SettingsScreen(state, vm)
+                is Screen.Settings -> SettingsScreen(state, vm, onOpenTtsSettings)
             }
         }
     }
@@ -1228,7 +1233,7 @@ private fun FailureScreen(vm: PosViewModel, title: String, message: String, retr
 /* ================================================================== */
 
 @Composable
-private fun SettingsScreen(state: UiState, vm: PosViewModel) {
+private fun SettingsScreen(state: UiState, vm: PosViewModel, onOpenTtsSettings: () -> Unit) {
     var draft by remember(state.settings) { mutableStateOf(state.settings) }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(GAP)) {
@@ -1244,7 +1249,7 @@ private fun SettingsScreen(state: UiState, vm: PosViewModel) {
                     .fillMaxWidth()
                     .height(132.dp), color = TP.Ink, padding = 22.dp
             ) {
-                Eyebrow("Tapnod POS · v1.0", Modifier.align(Alignment.TopStart), color = TP.Lime)
+                Eyebrow("Tapnod POS · v1.1", Modifier.align(Alignment.TopStart), color = TP.Lime)
                 Text(
                     "Settings", Modifier.align(Alignment.BottomStart),
                     color = TP.White, fontSize = 44.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-2).sp
@@ -1343,8 +1348,40 @@ private fun SettingsScreen(state: UiState, vm: PosViewModel) {
             }
 
             Tile(Modifier.fillMaxWidth()) {
-                ToggleRow("Speak results", "Say “Payment approved” out loud on this POS.", draft.voice) {
-                    draft = draft.copy(voice = it)
+                Column {
+                    ToggleRow("Speak results", "Say “Payment approved” out loud on this POS.", draft.voice) {
+                        draft = draft.copy(voice = it)
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(TP.Line)
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Eyebrow("Voice")
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        state.voiceLabel ?: "Loading voices…",
+                        fontSize = 16.sp, fontWeight = FontWeight.Bold, lineHeight = 20.sp
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (state.voiceNigerian) {
+                            "Nigerian English voice in use. Tap Next voice to hear the others (${state.voiceCount} installed)."
+                        } else {
+                            "No Nigerian voice on this phone yet. Tap Install voices, open Google's speech settings, " +
+                                "then install English (Nigeria). Come back and tap Next voice."
+                        },
+                        fontSize = 12.sp, color = TP.Mute, lineHeight = 16.sp
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(GAP)) {
+                        Chip("Test", TP.Ink, TP.Lime, Modifier.weight(1f)) { vm.testVoice() }
+                        Chip("Next voice", TP.Soft, TP.Ink, Modifier.weight(1.2f)) { vm.nextVoice() }
+                        Chip("Install voices", TP.Soft, TP.Ink, Modifier.weight(1.4f)) { onOpenTtsSettings() }
+                    }
                 }
             }
         }
@@ -1378,6 +1415,20 @@ private fun SettingsScreen(state: UiState, vm: PosViewModel) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun Chip(label: String, bg: Color, fg: Color, modifier: Modifier, onClick: () -> Unit) {
+    Box(
+        modifier
+            .height(48.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(bg)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = fg, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 

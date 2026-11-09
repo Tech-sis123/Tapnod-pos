@@ -70,7 +70,10 @@ data class UiState(
     val linkCustomer: Customer? = null,
     val pendingLinkCard: CardInfo? = null,
     val amountError: Boolean = false,
-    val connectionTest: String? = null
+    val connectionTest: String? = null,
+    val voiceLabel: String? = null,
+    val voiceNigerian: Boolean = false,
+    val voiceCount: Int = 0
 ) {
     val amountNaira: Long get() = amountDigits.toLongOrNull() ?: 0L
 }
@@ -78,11 +81,12 @@ data class UiState(
 class PosViewModel(app: Application) : AndroidViewModel(app) {
 
     private val store = SettingsStore(app)
-    private val speaker = Speaker(app)
-    private var api: TapnodApi = buildApi(store.load())
 
     private val _state = MutableStateFlow(UiState(settings = store.load()))
     val state: StateFlow<UiState> = _state.asStateFlow()
+
+    private val speaker = Speaker(app, store.voiceName) { refreshVoice() }
+    private var api: TapnodApi = buildApi(store.load())
 
     private var pollJob: Job? = null
     private var healthJob: Job? = null
@@ -338,6 +342,7 @@ class PosViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openSettings() {
         _state.update { it.copy(connectionTest = null) }
+        refreshVoice()
         go(Screen.Settings)
     }
 
@@ -358,6 +363,37 @@ class PosViewModel(app: Application) : AndroidViewModel(app) {
             _state.update {
                 it.copy(connectionTest = if (ok) "Connected. Tapnod answered." else "No answer from that URL.")
             }
+        }
+    }
+
+    /* ---------------- Voice ---------------- */
+
+    fun refreshVoice() {
+        val current = speaker.current()
+        val count = speaker.options().size
+        _state.update {
+            it.copy(
+                voiceLabel = current?.label,
+                voiceNigerian = current?.nigerian == true,
+                voiceCount = count
+            )
+        }
+    }
+
+    fun testVoice() {
+        val amount = _state.value.amountNaira.takeIf { it > 0 } ?: 15_000L
+        speaker.speak("Payment approved. ${Money.words(amount)}, to ${_state.value.settings.merchantName}.")
+    }
+
+    fun nextVoice() {
+        val options = speaker.options()
+        if (options.isEmpty()) return
+        val idx = options.indexOfFirst { it.name == speaker.current()?.name }
+        val next = options[(idx + 1).mod(options.size)]
+        if (speaker.useVoice(next.name)) {
+            store.voiceName = next.name
+            refreshVoice()
+            testVoice()
         }
     }
 
