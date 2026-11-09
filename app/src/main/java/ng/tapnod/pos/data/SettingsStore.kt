@@ -2,16 +2,19 @@ package ng.tapnod.pos.data
 
 import android.content.Context
 
+/** The demo backend on Render. Change it in Settings if you deploy your own. */
+const val DEFAULT_BACKEND_URL = "https://tapnod-demo.onrender.com"
+
 class SettingsStore(context: Context) {
 
     private val prefs = context.getSharedPreferences("tapnod_pos", Context.MODE_PRIVATE)
 
     fun load(): PosSettings = PosSettings(
-        simulator = prefs.getBoolean("simulator", true),
+        simulator = prefs.getBoolean("simulator", false),
         simOutcome = runCatching {
             SimOutcome.valueOf(prefs.getString("sim_outcome", SimOutcome.APPROVE.name)!!)
         }.getOrDefault(SimOutcome.APPROVE),
-        backendUrl = prefs.getString("backend_url", "") ?: "",
+        backendUrl = prefs.getString("backend_url", DEFAULT_BACKEND_URL) ?: DEFAULT_BACKEND_URL,
         terminalId = prefs.getString("terminal_id", "TPN-POS-001") ?: "TPN-POS-001",
         merchantName = prefs.getString("merchant_name", "Bisi Ventures") ?: "Bisi Ventures",
         merchantId = prefs.getString("merchant_id", "BISI-001") ?: "BISI-001",

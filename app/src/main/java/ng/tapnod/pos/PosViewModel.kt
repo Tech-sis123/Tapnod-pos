@@ -46,6 +46,7 @@ data class Sale(
 sealed interface Screen {
     data object Amount : Screen
     data class TapCard(val mode: TapMode) : Screen
+    data class CameraScan(val mode: TapMode) : Screen
     data class Reading(val mode: TapMode) : Screen
     data class Waiting(val sale: Sale) : Screen
     data class Result(val outcome: Outcome, val sale: Sale) : Screen
@@ -176,6 +177,30 @@ class PosViewModel(app: Application) : AndroidViewModel(app) {
 
     /** A card touched the phone but its number couldn't be read: use the demo card instead. */
     fun onAnyTap(mode: TapMode) = onCardNumber(DEMO_CARD_NUMBER, mode)
+
+    /* ---------------- Camera ---------------- */
+
+    fun openCamera(mode: TapMode) = go(Screen.CameraScan(mode))
+
+    /**
+     * The camera saw a card. [pan] is the card number if it could be read, or null if we only
+     * know a card is there (then it counts as the demo card when "Accept any tap" is on).
+     */
+    fun onCameraCard(pan: String?, mode: TapMode) {
+        var ok = false
+        _state.update { s ->
+            if (s.screen is Screen.CameraScan) {
+                ok = true
+                s.copy(screen = Screen.Reading(mode))
+            } else s
+        }
+        if (!ok) return
+        when {
+            pan != null -> onCardNumber(pan, mode)
+            _state.value.settings.acceptAnyTap -> onCardNumber(DEMO_CARD_NUMBER, mode)
+            else -> onCardError("Couldn't read the card number. Turn on Accept any tap, or try the light.", mode)
+        }
+    }
 
     fun cancelTap() {
         _state.update { it.copy(linkCustomer = null, pendingLinkCard = null) }
@@ -366,8 +391,12 @@ class PosViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(connectionTest = "Testing…") }
         viewModelScope.launch {
             val ok = buildApi(s).health()
-            _state.update {
-                it.copy(connectionTest = if (ok) "Connected. Tapnod answered." else "No answer from that URL.")
+            if (ok) {
+                // Connected: save it and go live straight away, so the POS never stays in Simulator by mistake.
+                saveSettings(s.copy(simulator = false))
+                _state.update { it.copy(connectionTest = "Connected and saved. The POS is now LIVE.") }
+            } else {
+                _state.update { it.copy(connectionTest = "No answer from that URL. Check it and try again.") }
             }
         }
     }

@@ -12,8 +12,8 @@ android {
         applicationId = "ng.tapnod.pos"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
     }
 
     signingConfigs {
@@ -75,4 +75,11 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // Reads EMV contactless bank cards (Visa, Mastercard, Verve) over ISO-DEP.
     implementation("com.github.devnied.emvnfccard:library:3.0.1")
+    // Camera card scanning: CameraX for the preview, ML Kit (on-device) to read the card text.
+    val cameraX = "1.4.1"
+    implementation("androidx.camera:camera-core:$cameraX")
+    implementation("androidx.camera:camera-camera2:$cameraX")
+    implementation("androidx.camera:camera-lifecycle:$cameraX")
+    implementation("androidx.camera:camera-view:$cameraX")
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 }

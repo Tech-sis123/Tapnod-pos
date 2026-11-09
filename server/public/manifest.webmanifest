@@ -1,0 +1,9 @@
+{
+  "name": "Tapnod",
+  "short_name": "Tapnod",
+  "start_url": "/?c=cus_amaka",
+  "display": "standalone",
+  "background_color": "#F2F0EA",
+  "theme_color": "#0B0B0B",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
