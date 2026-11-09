@@ -1264,6 +1264,14 @@ private fun SettingsScreen(state: UiState, vm: PosViewModel, onOpenTtsSettings: 
                 ) { draft = draft.copy(simulator = it) }
             }
 
+            Tile(Modifier.fillMaxWidth()) {
+                ToggleRow(
+                    "Accept any tap",
+                    "If a card's number can't be read, the tap still counts as the demo card. Keep on for demo day.",
+                    draft.acceptAnyTap
+                ) { draft = draft.copy(acceptAnyTap = it) }
+            }
+
             if (draft.simulator) {
                 Tile(Modifier.fillMaxWidth()) {
                     Column {
