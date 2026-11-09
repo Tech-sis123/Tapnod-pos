@@ -94,9 +94,17 @@ Errors can return `{ "message": "..." }` and the POS shows that message.
 
 ## Customer web app and demo backend (`server/`)
 
-The customer side is a web page, served by a tiny backend in `server/` (plain Node, no dependencies). One deploy gives you both the API the POS talks to and the page the customer opens.
+The customer side is a web page, served by a small backend in `server/` (plain Node, no dependencies). One deploy gives you the API the POS talks to and the page the customer opens.
 
-**Flow:** POS detects the tap, then `POST /api/pos/requests`. The customer page checks every second, vibrates, reads the amount aloud ("Bisi Ventures is asking you to pay fifteen thousand naira"), and the customer approves with her fingerprint. The POS sees `approved` on its next poll and says "Payment approved".
+**Flow:** the POS reads the card (tap or camera) and calls `POST /api/pos/requests`. The customer's phone gets a notification, and the page reads the amount aloud in the customer's language. She approves with her fingerprint. The POS sees `approved` on its next poll and says "Payment approved".
+
+### What the customer page does
+
+- **Languages:** English, Nigerian Pidgin, Yorùbá, Igbo and Hausa, used on the screen, in the voice and in notifications (`server/public/i18n.js`). Have a native speaker check the Yorùbá, Igbo and Hausa lines before a real launch.
+- **Nigerian voices:** with `YARNGPT_API_KEY` set, the server makes the audio with [YarnGPT](https://yarngpt.ai/api-docs) and the customer picks the voice in Settings. Without a key the phone's own voice is used; phones mostly ship UK and US voices only.
+- **Notifications:** real phone notifications (Web Push) even when Chrome is closed. Implemented with Node's built-in crypto in `server/push.js`.
+- **Fingerprint:** WebAuthn passkey on the phone. Needs https, so it works on Render, not on a plain `http://192.168...` address.
+- **Settings:** language, voice, speed, a sample button, notifications on and test, fingerprint setup.
 
 ### Run it
 
@@ -109,18 +117,29 @@ node server.js          # http://localhost:3000
 
 1. render.com, **New > Blueprint**, pick this repo. It reads `render.yaml`.
 2. You get a link like `https://tapnod-demo.onrender.com`.
-3. POS: Settings, turn **Simulator** off, Backend URL = that link.
-4. Customer phone: open `https://tapnod-demo.onrender.com/?c=cus_amaka` in Chrome, tap **Start**, and set up the fingerprint once.
+3. POS: Settings, Backend URL = that link, tap **Test connection**. A good test saves and switches the POS to live.
+4. Customer phone: open `https://tapnod-demo.onrender.com/?c=cus_amaka` in Chrome, pick a language, tap **Start**, allow the fingerprint and notifications.
 
-The free plan sleeps after 15 idle minutes and takes about a minute to wake. Open the customer page a few minutes before the demo; its polling keeps the server awake.
+The free plan sleeps after 15 idle minutes and takes about a minute to wake. Open the customer page a few minutes before the demo; it keeps the server awake.
+
+### Environment variables
+
+| Name | What it does |
+| --- | --- |
+| `TOKEN_SECRET` | Must match **Card token secret** in the POS settings. Default `tapnod-demo-secret`. |
+| `YARNGPT_API_KEY` | Turns on Nigerian voices. Every call uses YarnGPT credits. |
+| `VAPID_SECRET` | Keeps notification keys the same across restarts. Render generates it. |
+| `DEMO_AUTO_LINK` | Demo shortcut: unknown cards are linked to this customer on first use (`cus_amaka`). Empty = real "Card not linked" behaviour. |
 
 ### Notes
 
-- The demo card (the one "Simulate tap" and "Accept any tap" use) is linked to Amaka automatically on start, so no Link card step is needed after a restart. Cards linked with **Link card** live in memory and reset when the server restarts.
-- `TOKEN_SECRET` must match **Card token secret** in the POS settings. Both default to `tapnod-demo-secret`.
-- Fingerprint uses WebAuthn (a passkey on the phone). It needs https, so it works on Render, not on a plain `http://192.168...` address. Without it the page asks for an on-screen confirmation instead.
+- Cards, settings and notification subscriptions live in memory. The customer page re-sends its settings and subscription every minute, so a server restart heals itself while the page is open.
 - Demo shortcut: the fingerprint check happens on the phone and is not verified by the server. In production the server would issue the challenge and verify the signed response.
-- Customer endpoints: `GET /api/customer/{id}`, `GET /api/customer/{id}/latest`, `POST /api/customer/requests/{request_id}/approve` and `/decline`.
+- Customer endpoints: `GET /api/config`, `GET /api/voices`, `POST /api/tts`, `GET /api/customer/{id}`, `GET /api/customer/{id}/latest`, `POST /api/customer/{id}/prefs`, `POST /api/customer/{id}/subscribe`, `POST /api/customer/{id}/test-notification`, `POST /api/customer/requests/{request_id}/approve` and `/decline`.
+
+## Scan with camera
+
+On the tap screen, **Scan card with camera** reads the card through the back camera with ML Kit, on the phone (nothing is uploaded). A readable card number (it must pass the Luhn checksum) is used as the real card. If a card is clearly there but the number can't be read, it counts as the demo card when **Accept any tap** is on. There's a light button for dark rooms.
 
 ## Accept any tap
 
@@ -139,6 +158,8 @@ app/src/main/java/ng/tapnod/pos/
   MainActivity.kt        NFC reader mode on/off, hands taps to the view model
   PosViewModel.kt        Screens, sale flow, polling, link flow, settings
   nfc/CardReader.kt      EMV contactless read
+  ui/CameraScan.kt       Camera card scanning
+  util/CardScan.kt       Decides if the camera sees a card
   data/TapnodApi.kt      HTTP client for the backend + offline simulator
   data/SettingsStore.kt  Saved settings
   util/                  Money words, card token, voice and tones
@@ -147,7 +168,11 @@ app/src/main/java/ng/tapnod/pos/
 
 server/
   server.js              Demo backend (POS + customer API)
+  push.js                Phone notifications (Web Push, no dependencies)
+  tts.js                 Nigerian voices through YarnGPT
   public/index.html      Customer web app
+  public/i18n.js         Words in English, Pidgin, Yoruba, Igbo, Hausa
+  public/sw.js           Shows notifications when the page is closed
 ```
 
 Inter font: SIL Open Font License (see `INTER_LICENSE.txt`).

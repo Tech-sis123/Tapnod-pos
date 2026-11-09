@@ -122,6 +122,7 @@ fun TapnodApp(
             when (screen) {
                 is Screen.Amount -> AmountScreen(state, vm)
                 is Screen.TapCard -> TapScreen(state, vm, screen.mode, onOpenNfcSettings)
+                is Screen.CameraScan -> CameraScanScreen(state, vm, screen.mode)
                 is Screen.Reading -> ReadingScreen(state, screen.mode)
                 is Screen.Waiting -> WaitingScreen(state, vm, screen.sale)
                 is Screen.Result -> ResultScreen(vm, screen.outcome, screen.sale)
@@ -405,15 +406,29 @@ private fun TapScreen(state: UiState, vm: PosViewModel, mode: TapMode, onOpenNfc
                 Spacer(Modifier.height(6.dp))
                 Text(
                     when (state.nfc) {
-                        NfcStatus.READY -> "Hold the card flat on the back of this phone, near the top, until it beeps."
+                        NfcStatus.READY -> "Hold the card flat on the back of this phone until it beeps. Not working? Scan with camera."
                         NfcStatus.OFF -> "NFC is switched off on this phone. Turn it on to read cards."
-                        NfcStatus.MISSING -> "This phone can't read cards. Turn on Simulator in Settings to test."
+                        NfcStatus.MISSING -> "This phone has no NFC. Tap Scan with camera to read the card instead."
                     },
                     color = TP.InkMute,
                     fontSize = 15.sp,
                     lineHeight = 20.sp
                 )
             }
+        }
+        Tile(
+            Modifier
+                .fillMaxWidth()
+                .height(68.dp),
+            color = TP.Lime,
+            onClick = { vm.openCamera(mode) },
+            onClickLabel = "Scan the card with the camera",
+            padding = 18.dp
+        ) {
+            Text(
+                "Scan card with camera  →", Modifier.align(Alignment.CenterStart),
+                fontSize = 18.sp, fontWeight = FontWeight.ExtraBold
+            )
         }
         Row(
             Modifier
@@ -1249,7 +1264,7 @@ private fun SettingsScreen(state: UiState, vm: PosViewModel, onOpenTtsSettings: 
                     .fillMaxWidth()
                     .height(132.dp), color = TP.Ink, padding = 22.dp
             ) {
-                Eyebrow("Tapnod POS · v1.1", Modifier.align(Alignment.TopStart), color = TP.Lime)
+                Eyebrow("Tapnod POS · v1.2", Modifier.align(Alignment.TopStart), color = TP.Lime)
                 Text(
                     "Settings", Modifier.align(Alignment.BottomStart),
                     color = TP.White, fontSize = 44.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-2).sp
