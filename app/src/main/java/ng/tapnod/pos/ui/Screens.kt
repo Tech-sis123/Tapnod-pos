@@ -399,7 +399,7 @@ private fun TapScreen(state: UiState, vm: PosViewModel, mode: TapMode, onOpenNfc
                         NfcStatus.MISSING -> "No NFC"
                     },
                     color = TP.White,
-                    fontSize = 56.sp,
+                    fontSize = 48.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = (-2.5).sp
                 )
@@ -416,19 +416,35 @@ private fun TapScreen(state: UiState, vm: PosViewModel, mode: TapMode, onOpenNfc
                 )
             }
         }
-        Tile(
+        Row(
             Modifier
                 .fillMaxWidth()
                 .height(68.dp),
-            color = TP.Lime,
-            onClick = { vm.openCamera(mode) },
-            onClickLabel = "Scan the card with the camera",
-            padding = 18.dp
+            horizontalArrangement = Arrangement.spacedBy(GAP)
         ) {
-            Text(
-                "Scan card with camera  →", Modifier.align(Alignment.CenterStart),
-                fontSize = 18.sp, fontWeight = FontWeight.ExtraBold
-            )
+            Tile(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                color = TP.Lime,
+                onClick = { vm.openCamera(mode) },
+                onClickLabel = "Scan the card with the camera",
+                padding = 16.dp
+            ) {
+                Text("Scan with camera", Modifier.align(Alignment.CenterStart), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+            if (mode == TapMode.CHARGE) {
+                Tile(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    onClick = { vm.chooseCustomerToCharge() },
+                    onClickLabel = "Choose the customer instead of reading a card",
+                    padding = 16.dp
+                ) {
+                    Text("Choose customer", Modifier.align(Alignment.CenterStart), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
         Row(
             Modifier
@@ -446,7 +462,7 @@ private fun TapScreen(state: UiState, vm: PosViewModel, mode: TapMode, onOpenNfc
                     Column(Modifier.align(Alignment.BottomStart)) {
                         Text(
                             Money.format(state.amountNaira),
-                            fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1.5).sp,
+                            fontSize = 31.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1.5).sp,
                             maxLines = 1
                         )
                         Text(
@@ -592,7 +608,7 @@ private fun ReadingScreen(state: UiState, mode: TapMode) {
             Column(Modifier.align(Alignment.BottomStart)) {
                 Text(
                     if (mode == TapMode.CHARGE) "Sending to\nher phone" else "Linking card",
-                    color = TP.White, fontSize = 48.sp, fontWeight = FontWeight.ExtraBold,
+                    color = TP.White, fontSize = 41.sp, fontWeight = FontWeight.ExtraBold,
                     letterSpacing = (-2).sp, lineHeight = 50.sp
                 )
                 Spacer(Modifier.height(6.dp))
@@ -637,7 +653,7 @@ private fun WaitingScreen(state: UiState, vm: PosViewModel, sale: Sale) {
             Eyebrow("Step 3 of 3 · Waiting for customer", Modifier.align(Alignment.TopStart), color = TP.Lime)
             Column(Modifier.align(Alignment.CenterStart)) {
                 Text(
-                    clock, color = TP.White, fontSize = 96.sp, fontWeight = FontWeight.ExtraBold,
+                    clock, color = TP.White, fontSize = 82.sp, fontWeight = FontWeight.ExtraBold,
                     letterSpacing = (-4).sp
                 )
                 Text(
@@ -723,7 +739,7 @@ private fun CardTile(card: CardInfo, modifier: Modifier) {
         Eyebrow("Card", Modifier.align(Alignment.TopStart))
         Column(Modifier.align(Alignment.BottomStart)) {
             Text(
-                "•••• ${card.last4}",
+                if (card.last4.isBlank()) "No card" else "•••• ${card.last4}",
                 fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp, maxLines = 1
             )
             Text(card.scheme, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.2.sp, color = TP.Mute)
@@ -770,7 +786,7 @@ private fun ResultScreen(vm: PosViewModel, outcome: Outcome, sale: Sale) {
             )
             Column(Modifier.align(Alignment.BottomStart)) {
                 Text(
-                    title, color = fg, fontSize = 72.sp, fontWeight = FontWeight.ExtraBold,
+                    title, color = fg, fontSize = 61.sp, fontWeight = FontWeight.ExtraBold,
                     letterSpacing = (-3.5).sp, lineHeight = 72.sp
                 )
                 Text(
@@ -916,7 +932,7 @@ private fun ReceiptScreen(state: UiState, vm: PosViewModel, outcome: Outcome, sa
                     }
                 }
                 Spacer(Modifier.height(28.dp))
-                Text("Receipt", fontSize = 44.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-2).sp)
+                Text("Receipt", fontSize = 37.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-2).sp)
                 Text(whenText, fontSize = 14.sp, color = TP.Mute)
                 Spacer(Modifier.height(20.dp))
                 ReceiptRow("Merchant", state.settings.merchantName)
@@ -924,7 +940,7 @@ private fun ReceiptScreen(state: UiState, vm: PosViewModel, outcome: Outcome, sa
                 ReceiptRow("Terminal", state.settings.terminalId)
                 ReceiptRow("Amount", Money.format(sale.amountNaira), big = true)
                 ReceiptRow("In words", Money.words(sale.amountNaira))
-                ReceiptRow("Card", "•••• ${sale.card.last4} · ${sale.card.scheme}")
+                ReceiptRow("Card", if (sale.card.last4.isBlank()) "Picked on POS · Tapnod ID" else "•••• ${sale.card.last4} · ${sale.card.scheme}")
                 ReceiptRow("Customer", sale.customerName ?: "—")
                 ReceiptRow("Status", statusText)
                 ReceiptRow("Reference", sale.reference ?: "—")
@@ -1010,7 +1026,7 @@ private fun NotLinkedScreen(vm: PosViewModel, card: CardInfo) {
             Eyebrow("Unknown card", Modifier.align(Alignment.TopStart), color = TP.Lime)
             Column(Modifier.align(Alignment.BottomStart)) {
                 Text(
-                    "Card not linked to Tapnod", color = TP.White, fontSize = 46.sp,
+                    "Card not linked to Tapnod", color = TP.White, fontSize = 39.sp,
                     fontWeight = FontWeight.ExtraBold, letterSpacing = (-2).sp, lineHeight = 48.sp
                 )
                 Spacer(Modifier.height(12.dp))
@@ -1067,16 +1083,23 @@ private fun LinkPickScreen(state: UiState, vm: PosViewModel) {
                 .fillMaxWidth()
                 .height(168.dp), color = TP.Ink, padding = 22.dp
         ) {
-            Eyebrow("Setup · Link a card", Modifier.align(Alignment.TopStart), color = TP.Lime)
+            Eyebrow(
+                if (state.pickForCharge) "Step 2 of 3 · Customer" else "Setup · Link a card",
+                Modifier.align(Alignment.TopStart), color = TP.Lime
+            )
             Column(Modifier.align(Alignment.BottomStart)) {
                 Text(
-                    "Who owns the card?", color = TP.White, fontSize = 34.sp,
+                    if (state.pickForCharge) "Who is paying?" else "Who owns the card?",
+                    color = TP.White, fontSize = 34.sp,
                     fontWeight = FontWeight.ExtraBold, letterSpacing = (-1.5).sp
                 )
                 val pending = state.pendingLinkCard
                 Text(
-                    if (pending != null) "Card •••• ${pending.last4} is ready to link."
-                    else "Pick a customer, then tap their card.",
+                    when {
+                        state.pickForCharge -> "Pick the customer. Their phone gets the payment to approve."
+                        pending != null -> "Card •••• ${pending.last4} is ready to link."
+                        else -> "Pick a customer, then tap their card."
+                    },
                     color = TP.InkMute, fontSize = 15.sp
                 )
             }
@@ -1162,7 +1185,7 @@ private fun LinkDoneScreen(vm: PosViewModel, customer: Customer, card: CardInfo)
             )
             Column(Modifier.align(Alignment.BottomStart)) {
                 Text(
-                    "Card linked", fontSize = 64.sp, fontWeight = FontWeight.ExtraBold,
+                    "Card linked", fontSize = 54.sp, fontWeight = FontWeight.ExtraBold,
                     letterSpacing = (-3).sp, lineHeight = 64.sp
                 )
                 Spacer(Modifier.height(10.dp))
@@ -1205,7 +1228,7 @@ private fun FailureScreen(vm: PosViewModel, title: String, message: String, retr
             Eyebrow("Problem", Modifier.align(Alignment.TopStart), color = TP.White)
             Column(Modifier.align(Alignment.BottomStart)) {
                 Text(
-                    title, color = TP.White, fontSize = 50.sp, fontWeight = FontWeight.ExtraBold,
+                    title, color = TP.White, fontSize = 42.sp, fontWeight = FontWeight.ExtraBold,
                     letterSpacing = (-2).sp, lineHeight = 52.sp
                 )
                 Spacer(Modifier.height(10.dp))
@@ -1264,10 +1287,10 @@ private fun SettingsScreen(state: UiState, vm: PosViewModel, onOpenTtsSettings: 
                     .fillMaxWidth()
                     .height(132.dp), color = TP.Ink, padding = 22.dp
             ) {
-                Eyebrow("Tapnod POS · v1.2", Modifier.align(Alignment.TopStart), color = TP.Lime)
+                Eyebrow("Tapnod POS · v1.3", Modifier.align(Alignment.TopStart), color = TP.Lime)
                 Text(
                     "Settings", Modifier.align(Alignment.BottomStart),
-                    color = TP.White, fontSize = 44.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-2).sp
+                    color = TP.White, fontSize = 37.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-2).sp
                 )
             }
 

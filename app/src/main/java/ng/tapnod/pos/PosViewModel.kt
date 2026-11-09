@@ -62,6 +62,8 @@ sealed interface Screen {
 const val DEMO_CARD_NUMBER = "5399000000004821"
 
 data class UiState(
+    /** true = the customer list is for charging (picked on the POS), false = for linking a card. */
+    val pickForCharge: Boolean = false,
     val screen: Screen = Screen.Amount,
     val amountDigits: String = "",
     val settings: PosSettings,
@@ -203,7 +205,7 @@ class PosViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun cancelTap() {
-        _state.update { it.copy(linkCustomer = null, pendingLinkCard = null) }
+        _state.update { it.copy(linkCustomer = null, pendingLinkCard = null, pickForCharge = false) }
         go(Screen.Amount)
     }
 
@@ -211,10 +213,10 @@ class PosViewModel(app: Application) : AndroidViewModel(app) {
 
     /* ---------------- Charge flow ---------------- */
 
-    private suspend fun createRequest(card: CardInfo) {
+    private suspend fun createRequest(card: CardInfo, customerId: String? = null) {
         val amount = _state.value.amountNaira
         try {
-            when (val r = api.createRequest(amount * 100, card)) {
+            when (val r = api.createRequest(amount * 100, card, customerId)) {
                 is CreateResult.NotLinked -> {
                     speaker.failure()
                     go(Screen.NotLinked(card))
@@ -326,7 +328,7 @@ class PosViewModel(app: Application) : AndroidViewModel(app) {
     /* ---------------- Link a card ---------------- */
 
     fun startLink(fromCard: CardInfo? = null) {
-        _state.update { it.copy(pendingLinkCard = fromCard, linkCustomer = null) }
+        _state.update { it.copy(pendingLinkCard = fromCard, linkCustomer = null, pickForCharge = false) }
         go(Screen.LinkPick)
         loadCustomers()
     }
@@ -345,7 +347,21 @@ class PosViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Charge without a card: the agent picks a signed-up customer and their phone gets the payment. */
+    fun chooseCustomerToCharge() {
+        _state.update { it.copy(pendingLinkCard = null, linkCustomer = null, pickForCharge = true) }
+        go(Screen.LinkPick)
+        loadCustomers()
+    }
+
     fun pickLinkCustomer(customer: Customer) {
+        if (_state.value.pickForCharge) {
+            _state.update { it.copy(pickForCharge = false) }
+            go(Screen.Reading(TapMode.CHARGE))
+            speaker.tick()
+            viewModelScope.launch { createRequest(CardInfo(token = "", last4 = "", scheme = "TAPNOD"), customer.id) }
+            return
+        }
         val pending = _state.value.pendingLinkCard
         _state.update { it.copy(linkCustomer = customer) }
         if (pending != null) {
