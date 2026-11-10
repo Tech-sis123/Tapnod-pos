@@ -9,8 +9,8 @@ This repo holds the whole demo:
 | Part | What it is | Built with |
 | --- | --- | --- |
 | **Tapnod POS** (`app/`) | Android app the shop agent uses. Types the amount, reads the card by tap or camera, waits for the customer, prints a receipt. | Kotlin, Jetpack Compose, CameraX, ML Kit |
-| **Customer web app** (`server/public/`) | Page on the customer's phone. Reads the payment aloud, sends a notification, approves with fingerprint. | HTML, JavaScript, Web Push, WebAuthn |
-| **Backend** (`server/`) | Connects the two. Holds payment requests, sends notifications, makes Nigerian-voice audio. | Node.js, no dependencies |
+| **Landing page + customer web app** (`server/public/`) | Public landing page, and the app on the customer's phone: sign up, fingerprint sign-in, payments read aloud, notifications, fingerprint approval. | HTML, JavaScript, Web Push, WebAuthn passkeys |
+| **Backend** (`server/`) | Connects the two. Customer accounts in Postgres, payment requests, fingerprint checks, notifications, Nigerian-voice audio. | Node.js, Postgres (`pg` is the only package) |
 
 ## How a payment works
 
@@ -19,12 +19,14 @@ This repo holds the whole demo:
  ----------------                --------------                   ----------------
  1. Types ₦15,000, taps Charge
  2. Customer taps card,
-    or agent scans it      --->  3. Finds whose card it is
-    (card number hashed            creates a payment request ---> 4. Notification + voice:
-     on the phone first)           (2-minute timer)                  "Bisi Ventures is asking you
-                                                                      to pay fifteen thousand naira"
+    agent scans it, or
+    agent picks her by     --->  3. Finds the customer,
+    name or Tapnod ID              creates a payment request ---> 4. Notification + voice:
+    (card number hashed            (2-minute timer)                  "Bisi Ventures is asking you
+     on the phone first)                                              to pay fifteen thousand naira"
                                                                   5. Fingerprint prompt opens,
-                                   6. Marks it approved      <---    customer touches the sensor
+                                   6. Checks the fingerprint <---    customer touches the sensor
+                                      signature, approves
  7. Sees approved, says    <---
     "Payment approved",
     shows the receipt
@@ -36,11 +38,11 @@ The card number never leaves the POS phone. It is turned into a one-way token (H
 
 ### 1. Put the backend online (free, about 5 minutes)
 
-1. On [render.com](https://render.com), sign in with GitHub, then **New > Blueprint** and pick this repo. It reads `render.yaml`.
+1. On [render.com](https://render.com), sign in with GitHub, then **New > Blueprint** and pick this repo. It reads `render.yaml` and creates the web service **and a free Postgres database** for customer accounts.
 2. Click **Apply**. You get a link like `https://tapnod-demo.onrender.com`.
 3. Optional: under **Environment**, add `YARNGPT_API_KEY` to turn on Nigerian voices (see below).
 
-Check it's alive: `https://<your-link>/api/health` shows `{"ok":true}`.
+Check it's alive: `https://<your-link>/healthz` shows `{"ok":true,"storage":"postgres"}`.
 
 ### 2. Install the POS app
 
@@ -51,28 +53,30 @@ Check it's alive: `https://<your-link>/api/health` shows `{"ok":true}`.
 
 Needs Android 8.0 or newer. NFC is optional: without it, use **Scan card with camera**.
 
-### 3. Open the customer app
+### 3. Create a customer account
 
-1. On the customer's phone, open `https://<your-link>/?c=cus_amaka` in **Chrome**, not inside WhatsApp or Instagram.
-2. Pick a language and tap **Start**. The phone asks for a fingerprint straight away, to create a Tapnod passkey.
-3. Turn on notifications.
+1. On the customer's phone, open `https://<your-link>` in **Chrome** (not inside WhatsApp or Instagram) and tap **Get started**.
+2. Enter name, 10-digit account number, phone (optional) and a password, and pick a language. You get a **Tapnod ID** like `TN-4821-KX`.
+3. Add your fingerprint: the phone saves a Tapnod passkey. From now on you sign in with your finger.
+4. Turn on notifications. They keep arriving even after you sign out.
 
 ### 4. Make a payment
 
-On the POS, type `15000`, tap **Charge**, then tap or scan a card. The customer's phone speaks the payment and opens the fingerprint prompt by itself. Touching the sensor approves, and the POS announces "Payment approved".
+On the POS, type `15000`, tap **Charge**, then tap or scan a card, or tap **Choose customer** and pick her by name. Her phone gets a notification, speaks the payment and opens the fingerprint prompt by itself. Touching the sensor approves, and the POS announces "Payment approved".
 
 ## Tapnod POS (Android)
 
 | Screen | What it does |
 | --- | --- |
 | Amount | Keypad; merchant fixed as Bisi Ventures (change it in Settings) |
-| Tap card | Waits for a contactless tap, with **Scan card with camera** as the alternative |
+| Tap card | Waits for a contactless tap, with **Scan with camera** and **Choose customer** as alternatives |
+| Choose customer | Lists everyone who signed up (name, Tapnod ID, masked account); picking one charges them |
 | Camera scan | Reads the card through the back camera, with a light button for dark rooms |
 | Waiting | 2-minute countdown while the customer decides; the agent can cancel |
 | Result | Green and spoken "Payment approved", or red Declined, within about 2 seconds |
 | Receipt | The payment with its reference number |
 | Not linked | Shown when a card isn't registered with Tapnod |
-| Link card | Setup mode: pick a customer, tap their card |
+| Link card | Setup mode: pick a signed-up customer, tap their card |
 | Settings | Simulator, Accept any tap, backend URL, terminal and merchant, voice |
 
 ### Reading the card
@@ -85,25 +89,34 @@ On the POS, type `15000`, tap **Charge**, then tap or scan a card. The customer'
 
 For rehearsing without internet. Customers are simulated and the "customer" answers after about 4 seconds; set the answer to Approve, Decline or No answer in Settings. **Simulate tap** stands in for a card. The app starts live by default; switch Simulator on in Settings.
 
-## Customer web app
+## Landing page and customer web app
 
-- **Speaks every payment** in **English, Nigerian Pidgin, Yorùbá, Igbo or Hausa**. The screen, voice and notifications all follow the chosen language (`server/public/i18n.js`).
+**Landing page** (`/`): what Tapnod is, how a payment works in three steps, who it's for, the five languages, and buttons to sign up or sign in.
+
+**Customer app** (`/app`):
+
+- **Sign up** with full name, 10-digit account number, optional phone and a password. You get a **Tapnod ID** that shops can find you by.
+- **Fingerprint sign-in.** After sign-up you add your fingerprint (a WebAuthn passkey). Signing in is then one touch, with no account number to type. Account number and password still work as a fallback.
+- **Payments read aloud** in **English, Nigerian Pidgin, Yorùbá, Igbo or Hausa**, on the screen, in the voice and in notifications (`server/public/i18n.js`).
+- **Fingerprint approval.** When a payment arrives, the fingerprint prompt opens by itself; touching the sensor approves. The server checks the passkey's signature against a challenge made for that exact payment. Phones without a fingerprint approve with the account password.
+- **Notifications** (Web Push) arrive even when Chrome is closed or the customer is signed out (`server/public/sw.js`). Tapping one opens the app at the payment.
 - **Nigerian voices** through [YarnGPT](https://yarngpt.ai/api-docs) when the backend has a key. Without one, the phone's own voice is used; phones mostly ship UK and US English voices only.
-- **Fingerprint** with a WebAuthn passkey. It's set up on the Start tap, and the prompt opens by itself for every new payment. The Approve button stays as a backup.
-- **Notifications** (Web Push) that arrive even when Chrome is closed (`server/public/sw.js`).
-- **Settings:** language, voice, speed, play a sample, notifications on and test, fingerprint.
-- Keeps the screen awake while live. If Chrome blocks the voice, a **Tap here to turn on Tapnod's voice** bar appears.
+- **Settings:** language, voice, speed, play a sample, fingerprint, notifications on and test, account, sign out.
 
-Phone browsers only allow sound and fingerprint prompts after the person has tapped the page. That's why there is one **Start** tap, and one tap after reloading the page.
+Phone browsers only allow sound and fingerprint prompts after the person has tapped the page, so the app asks for one tap after it reloads.
 
 ## Backend
 
-Plain Node 18+, no npm packages. Web Push encryption and VAPID signing use Node's built-in crypto (`server/push.js`).
+Plain Node 18+. The only package is `pg`, for Postgres. Web Push, password hashing (scrypt), sessions and passkey checks all use Node's built-in crypto (`push.js`, `auth.js`).
 
 ```bash
 cd server
-node server.js          # http://localhost:3000
+npm install
+node server.js                                   # data in memory, for a quick try
+DATABASE_URL=postgres://... node server.js       # data in Postgres
 ```
+
+Tables are created automatically on start: `customers`, `credentials` (passkey public keys), `cards` (linked card tokens) and `subscriptions` (notification endpoints). Payment requests last 2 minutes and stay in memory.
 
 Fingerprint only works over https, so test it on Render or `localhost`, not on a `http://192.168...` address.
 
@@ -111,10 +124,11 @@ Fingerprint only works over https, so test it on Render or `localhost`, not on a
 
 | Name | What it does |
 | --- | --- |
+| `DATABASE_URL` | Postgres connection. Render's blueprint fills it in. Without it, data lives in memory and is lost on restart. |
 | `TOKEN_SECRET` | Key for card tokens. Must match **Card token secret** in the POS settings. Default `tapnod-demo-secret`. |
 | `YARNGPT_API_KEY` | Turns on Nigerian voices. Every call spends YarnGPT credits. |
-| `VAPID_SECRET` | Keeps notification keys the same across restarts. Render generates it. |
-| `DEMO_AUTO_LINK` | Demo shortcut: unknown cards are linked to this customer on first use (`cus_amaka`). Empty = real "Card not linked" behaviour. |
+| `VAPID_SECRET` | Signs sign-in sessions and keeps notification keys the same across restarts. Render generates it. |
+| `DEMO_AUTO_LINK` | Demo shortcut for unknown cards: `latest` (default) links them to the most recent sign-up, a customer id links them to that customer, empty gives the real "Card not linked" behaviour. |
 
 ### API
 
@@ -125,10 +139,10 @@ Every POS request carries the header `X-Terminal-Id`. The card is identified by 
 | Method and path | Purpose |
 | --- | --- |
 | `GET /api/health` | Any 2xx means online |
-| `POST /api/pos/requests` | Create a payment request after a card read. `201` returns `request_id`, `customer_name`, `expires_at_ms`. Unknown card: `404` with `"error": "card_not_linked"` |
+| `POST /api/pos/requests` | Create a payment request from a card read (`card_token`) or a picked customer (`customer_id`). `201` returns `request_id`, `customer_name`, `expires_at_ms`. Unknown card: `404` with `"error": "card_not_linked"` |
 | `GET /api/pos/requests/{id}` | Polled every 0.7s: `status` is `pending`, `approved`, `declined`, `expired` or `cancelled`, plus `reference` |
 | `POST /api/pos/requests/{id}/cancel` | Agent cancelled while waiting |
-| `GET /api/pos/customers` | Customers for link-card mode |
+| `GET /api/pos/customers` | Everyone who signed up: name, Tapnod ID, masked account |
 | `POST /api/pos/cards/link` | Link a `card_token` to a `customer_id` |
 
 Create-request body:
@@ -146,19 +160,28 @@ Create-request body:
 }
 ```
 
-**Customer side**
+**Accounts**
 
 | Method and path | Purpose |
 | --- | --- |
-| `GET /api/config` | Notification public key, whether Nigerian voices are on, languages |
-| `GET /api/voices` | Nigerian voices available |
-| `POST /api/tts` | Make a voice sample (`text`, `voice`) |
-| `GET /api/customer/{id}` | Name and saved settings |
-| `GET /api/customer/{id}/latest` | Newest payment for this customer, with its audio link when ready |
-| `POST /api/customer/{id}/prefs` | Save language and voice |
-| `POST /api/customer/{id}/subscribe` | Register this phone for notifications |
-| `POST /api/customer/{id}/test-notification` | Send a test notification |
-| `POST /api/customer/requests/{id}/approve` and `/decline` | The customer's answer |
+| `POST /api/auth/signup` | `name`, `account_number` (10 digits), `phone`, `password`, `lang`. Returns a session `token` and the customer with their Tapnod ID |
+| `POST /api/auth/login` | Account number and password |
+| `POST /api/auth/passkey/login/options` then `POST /api/auth/passkey/login` | Fingerprint sign-in: a challenge, then the signed response |
+
+**Signed-in customer** (header `Authorization: Bearer <token>`)
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /api/me` | The customer, and whether a fingerprint is added |
+| `POST /api/me/passkey/options` then `POST /api/me/passkey` | Add a fingerprint passkey |
+| `GET /api/me/latest` | Newest payment for this customer, with its audio link when ready |
+| `POST /api/me/prefs` | Save language and voice |
+| `POST /api/me/subscribe` | Register this phone for notifications |
+| `POST /api/me/test-notification` | Send a test notification |
+| `POST /api/customer/requests/{id}/approve/options` then `.../approve` | Approve with a fingerprint signature for this payment (or `password` if the account has no fingerprint) |
+| `POST /api/customer/requests/{id}/decline` | Decline |
+
+**Other:** `GET /healthz`, `GET /api/config`, `GET /api/voices`, `POST /api/tts`.
 
 Errors return `{ "message": "..." }`, and the POS shows that message.
 
@@ -167,15 +190,15 @@ Errors return `{ "message": "..." }`, and the POS shows that message.
 - [ ] Both phones on **your own hotspot**, not venue Wi-Fi
 - [ ] Open the customer page about 5 minutes early: Render's free plan sleeps after 15 idle minutes and takes about a minute to wake
 - [ ] POS status line says **LIVE · CONNECTED**
-- [ ] Customer page opened **in Chrome**, Start done, fingerprint set up, notifications on
+- [ ] Customer account created **in Chrome** on the customer's phone, fingerprint added, notifications on
 - [ ] One test payment run end to end
 - [ ] Phone volume up on both phones
 
 ## Demo shortcuts (what a real launch would change)
 
-- **Fingerprint:** checked on the phone and not verified by the server. In production the server would issue the challenge and verify the signed response.
-- **Memory only:** the backend keeps data in memory, so it resets on restart. The customer page re-sends its settings and notification registration every minute to recover.
-- **Auto-link:** `DEMO_AUTO_LINK` links any unknown card to Amaka.
+- **Account number:** taken as typed. A real launch would confirm it belongs to the customer (name enquiry, BVN or an OTP from the bank).
+- **Free database:** Render's free Postgres expires 30 days after creation. Fine for the event; a launch needs a paid database with backups.
+- **Auto-link:** `DEMO_AUTO_LINK` links any unknown card to the most recent sign-up.
 - **Card reading on a phone:** in a pilot, a certified POS terminal reads the card and hands Tapnod a token.
 - **Translations:** the Yorùbá, Igbo and Hausa lines need checking by native speakers.
 
@@ -188,7 +211,7 @@ app/src/main/java/ng/tapnod/pos/
   nfc/CardReader.kt      EMV contactless read
   ui/CameraScan.kt       Camera card scanning
   ui/Screens.kt          Every POS screen
-  ui/Theme.kt            Colours, Inter font, tiles
+  ui/Theme.kt            Colours (Swiss classic, shared with the web app), Inter, tiles
   data/TapnodApi.kt      HTTP client for the backend + offline simulator
   data/SettingsStore.kt  Saved settings
   util/CardScan.kt       Decides if the camera sees a card (Luhn check)
@@ -196,10 +219,14 @@ app/src/main/java/ng/tapnod/pos/
   util/                  Money words, voice and tones
 
 server/
-  server.js              Backend (POS + customer API)
+  server.js              Backend (POS, accounts and customer API)
+  db.js                  Postgres storage (memory when no DATABASE_URL)
+  auth.js                Passwords, sessions, fingerprint passkey checks
   push.js                Phone notifications (Web Push, built-in crypto)
   tts.js                 Nigerian voices through YarnGPT
-  public/index.html      Customer web app
+  public/landing.html    Landing page
+  public/app.html        Customer web app
+  public/tapnod.css      Shared design system
   public/i18n.js         English, Pidgin, Yorùbá, Igbo, Hausa
   public/sw.js           Shows notifications when the page is closed
 

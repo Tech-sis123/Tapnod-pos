@@ -20,14 +20,14 @@ self.addEventListener('push', (event) => {
       vibrate: [200, 100, 200, 100, 200],
       icon: '/icon.svg',
       badge: '/icon.svg',
-      data: { url: data.url || '/' },
+      data: { url: data.url || '/app' },
     });
   })());
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = new URL(event.notification.data && event.notification.data.url || '/', self.location.origin).href;
+  const url = new URL(event.notification.data && event.notification.data.url || '/app', self.location.origin).href;
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const w of windows) {
