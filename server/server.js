@@ -1,46 +1,32 @@
-// Tapnod demo backend + customer web app.
-// No dependencies: plain Node (18+). Run with `node server.js`.
-//
-// The POS app talks to /api/pos/* (contract in the main README).
-// The customer's phone opens / in the browser and talks to /api/customer/*.
-// Everything lives in memory, which is fine for a demo.
+// Tapnod backend: serves the landing page and customer app, and the API for the POS and the customer.
+// Plain Node 18+. The only package is `pg`, used when DATABASE_URL is set.
 
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const db = require('./db');
 const push = require('./push');
 const tts = require('./tts');
+const auth = require('./auth');
 const i18n = require('./public/i18n');
 
 const PORT = process.env.PORT || 3000;
 // Must match "Card token secret" in the POS settings (the POS default is the same).
 const TOKEN_SECRET = process.env.TOKEN_SECRET || 'tapnod-demo-secret';
-// Demo shortcut: any card the server doesn't know is linked to this customer on first use.
-// Empty = unknown cards get "Card not linked" (the real behaviour).
-const DEMO_AUTO_LINK = process.env.DEMO_AUTO_LINK ?? 'cus_amaka';
-// The test card the POS uses for "Simulate tap" and "Accept any tap".
-const DEMO_CARD_NUMBER = '5399000000004821';
+// Signs sign-in sessions and keeps notification keys stable. Render generates it.
+const APP_SECRET = process.env.VAPID_SECRET || TOKEN_SECRET;
+// Demo shortcut for cards the server has never seen:
+//   "latest" (default) = link the card to the most recently signed-up customer
+//   a customer id      = link it to that customer
+//   empty              = real behaviour, the POS shows "Card not linked"
+const DEMO_AUTO_LINK = process.env.DEMO_AUTO_LINK ?? 'latest';
 const REQUEST_TTL_MS = 120_000;
 const LANGS = Object.keys(i18n.LANGS);
 
-const vapid = push.vapidFromSecret(process.env.VAPID_SECRET || TOKEN_SECRET);
-
-const customers = [
-  { id: 'cus_amaka', name: 'Amaka Okafor', note: 'Smartphone, screen reader on' },
-  { id: 'cus_ngozi', name: 'Mama Ngozi', note: 'Button phone, call to approve' },
-  { id: 'cus_tunde', name: 'Tunde Bakare', note: 'Smartphone' },
-];
-
-const cards = new Map(); // card_token -> customer id
-const requests = new Map(); // request id -> request
-const prefs = new Map(); // customer id -> { lang, voice }
-const subscriptions = new Map(); // customer id -> Map(endpoint -> push subscription)
-
-// Pre-link the demo card to Amaka, so a fresh server (or a free host that
-// restarted while asleep) works straight away without the Link card step.
-const demoToken = crypto.createHmac('sha256', TOKEN_SECRET).update(DEMO_CARD_NUMBER).digest('hex');
-cards.set(demoToken, 'cus_amaka');
+const vapid = push.vapidFromSecret(APP_SECRET);
+const sessions = auth.sessions(APP_SECRET);
+const requests = new Map(); // payment requests live 2 minutes, memory is enough
 
 /* ---------------- helpers ---------------- */
 
@@ -52,85 +38,89 @@ function send(res, code, body) {
 function readJson(req) {
   return new Promise((resolve) => {
     let raw = '';
-    req.on('data', (chunk) => {
-      raw += chunk;
-      if (raw.length > 1e5) req.destroy();
-    });
-    req.on('end', () => {
-      try { resolve(raw ? JSON.parse(raw) : {}); } catch { resolve(null); }
-    });
+    req.on('data', (chunk) => { raw += chunk; if (raw.length > 1e5) req.destroy(); });
+    req.on('end', () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch { resolve(null); } });
   });
 }
 
+// The website as the phone sees it, for fingerprint checks. Render terminates https in front of us.
+function siteOf(req) {
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'localhost').split(',')[0].trim();
+  const proto = String(req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
+  return { origin: `${proto}://${host}`, rpId: host.replace(/:\d+$/, '') };
+}
+
 const STATIC = {
-  '/': ['index.html', 'text/html; charset=utf-8'],
-  '/index.html': ['index.html', 'text/html; charset=utf-8'],
+  '/': ['landing.html', 'text/html; charset=utf-8'],
+  '/app': ['app.html', 'text/html; charset=utf-8'],
+  '/tapnod.css': ['tapnod.css', 'text/css; charset=utf-8'],
   '/i18n.js': ['i18n.js', 'application/javascript; charset=utf-8'],
   '/sw.js': ['sw.js', 'application/javascript; charset=utf-8'],
   '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json'],
   '/icon.svg': ['icon.svg', 'image/svg+xml'],
 };
 
+function newTapnodId() {
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const n = String(crypto.randomInt(0, 10000)).padStart(4, '0');
+  return `TN-${n}-${letters[crypto.randomInt(letters.length)]}${letters[crypto.randomInt(letters.length)]}`;
+}
+
+const mask = (acct) => '••••' + String(acct).slice(-4);
+
+// What the customer's own app may see about her.
+const publicCustomer = (c) => ({
+  id: c.id, tapnod_id: c.tapnod_id, name: c.name, account_masked: mask(c.account_number),
+  phone: c.phone, prefs: { lang: c.lang, voice: c.voice },
+});
+
 function refresh(r) {
   if (r.status === 'pending' && Date.now() > r.expires_at_ms) r.status = 'expired';
   return r;
 }
 
-const prefsFor = (id) => prefs.get(id) || { lang: 'en', voice: '' };
-
-function forCustomer(r) {
-  const p = prefsFor(r.customer_id);
-  const audio = r.audio && r.audio.key === p.lang + '|' + p.voice ? r.audio.url : null;
+function forCustomer(r, c) {
+  const audio = r.audio && c && r.audio.key === c.lang + '|' + c.voice ? r.audio.url : null;
   return {
-    request_id: r.request_id,
-    status: r.status,
-    amount_kobo: r.amount_kobo,
-    currency: r.currency,
-    merchant_name: r.merchant_name,
-    card_last4: r.card_last4,
-    card_scheme: r.card_scheme,
-    reference: r.reference,
-    expires_at_ms: r.expires_at_ms,
-    audio_url: audio,
+    request_id: r.request_id, status: r.status, amount_kobo: r.amount_kobo, currency: r.currency,
+    merchant_name: r.merchant_name, card_last4: r.card_last4, card_scheme: r.card_scheme,
+    reference: r.reference, expires_at_ms: r.expires_at_ms, audio_url: audio,
   };
+}
+
+async function signedInCustomer(req) {
+  const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const id = sessions.read(token);
+  return id ? db.getCustomer(id) : null;
 }
 
 /* ---------------- side effects when a charge arrives ---------------- */
 
-// Phone notification in the customer's language.
-async function notify(r) {
-  const subs = subscriptions.get(r.customer_id);
-  if (!subs || !subs.size) return;
-  const { lang } = prefsFor(r.customer_id);
+async function notify(r, c) {
+  const subs = await db.subscriptionsFor(c.id);
+  if (!subs.length) return;
   const a = i18n.moneyText(r.amount_kobo);
   const data = {
-    title: i18n.t(lang, 'notifTitle', { a, m: r.merchant_name }),
-    body: i18n.t(lang, 'notifBody'),
+    title: i18n.t(c.lang, 'notifTitle', { a, m: r.merchant_name }),
+    body: i18n.t(c.lang, 'notifBody'),
     request_id: r.request_id,
-    url: '/?c=' + r.customer_id,
+    url: '/app',
   };
-  await Promise.all([...subs.values()].map(async (sub) => {
+  await Promise.all(subs.map(async (sub) => {
     try {
       const status = await push.send(sub, data, vapid);
-      if (status === 404 || status === 410) subs.delete(sub.endpoint); // phone unsubscribed
+      if (status === 404 || status === 410) await db.deleteSubscription(sub.endpoint);
       else if (status >= 400) console.warn('push failed', status);
-    } catch (e) {
-      console.warn('push error', e.message);
-    }
+    } catch (e) { console.warn('push error', e.message); }
   }));
 }
 
-// Nigerian voice audio, made on the server so it's ready when the phone shows the payment.
-async function prepareAudio(r) {
+async function prepareAudio(r, c) {
   if (!tts.enabled()) return;
-  const { lang, voice } = prefsFor(r.customer_id);
-  const key = lang + '|' + voice;
   try {
-    const url = await tts.speak(i18n.sayFor(lang, 'pending', r).spoken, voice || undefined);
-    r.audio = { key, url };
-  } catch (e) {
-    console.warn('voice failed', e.message);
-  }
+    const url = await tts.speak(i18n.sayFor(c.lang, 'pending', r).spoken, c.voice || undefined);
+    r.audio = { key: c.lang + '|' + c.voice, url };
+  } catch (e) { console.warn('voice failed', e.message); }
 }
 
 /* ---------------- routes ---------------- */
@@ -141,6 +131,11 @@ async function route(req, res) {
   const m = req.method;
   let match;
 
+  // Old customer links (/?c=...) go to the app.
+  if (m === 'GET' && p === '/' && url.searchParams.has('c')) {
+    res.writeHead(302, { Location: '/app' });
+    return res.end();
+  }
   if (m === 'GET' && STATIC[p]) {
     const [file, type] = STATIC[p];
     const headers = { 'Content-Type': type, 'Cache-Control': 'no-cache' };
@@ -149,7 +144,7 @@ async function route(req, res) {
     return res.end(fs.readFileSync(path.join(__dirname, 'public', file)));
   }
 
-  if (m === 'GET' && p === '/api/health') return send(res, 200, { ok: true });
+  if (m === 'GET' && (p === '/api/health' || p === '/healthz')) return send(res, 200, { ok: true, storage: db.kind });
 
   if (m === 'GET' && p === '/api/config') {
     return send(res, 200, { push_public_key: vapid.publicKey, nigerian_voices: tts.enabled(), languages: LANGS });
@@ -160,7 +155,6 @@ async function route(req, res) {
     catch (e) { return send(res, 502, { message: e.message, voices: [] }); }
   }
 
-  // Voice preview for the settings screen.
   if (m === 'POST' && p === '/api/tts') {
     const b = await readJson(req);
     if (!tts.enabled()) return send(res, 503, { message: 'Nigerian voices are not switched on (no YarnGPT key).' });
@@ -171,55 +165,240 @@ async function route(req, res) {
     catch (e) { return send(res, 502, { message: e.message }); }
   }
 
-  // ---- POS side (matches the Tapnod POS README) ----
-  if (m === 'GET' && p === '/api/pos/customers') return send(res, 200, { customers });
+  /* ---------- accounts ---------- */
+
+  if (m === 'POST' && p === '/api/auth/signup') {
+    const b = await readJson(req);
+    const name = String(b?.name || '').trim().slice(0, 80);
+    const account = String(b?.account_number || '').replace(/\s/g, '');
+    const phone = String(b?.phone || '').replace(/[^\d+]/g, '').slice(0, 16);
+    const password = String(b?.password || '');
+    if (name.length < 2) return send(res, 400, { message: 'Enter your full name.', field: 'name' });
+    if (!/^\d{10}$/.test(account)) return send(res, 400, { message: 'Account number must be 10 digits.', field: 'account_number' });
+    if (password.length < 6) return send(res, 400, { message: 'Password must be at least 6 characters.', field: 'password' });
+    const lang = LANGS.includes(b?.lang) ? b.lang : 'en';
+    let c = null;
+    for (let i = 0; i < 5 && !c; i++) {
+      try {
+        c = await db.createCustomer({
+          id: 'cus_' + crypto.randomBytes(6).toString('hex'), tapnod_id: newTapnodId(), name,
+          account_number: account, phone, password_hash: auth.hashPassword(password),
+          lang, voice: '', created_at: Date.now(),
+        });
+      } catch (e) {
+        if (e.code !== 'DUPLICATE') throw e;
+        if (await db.getCustomerByAccount(account)) {
+          return send(res, 409, { message: 'This account number already has Tapnod. Sign in instead.', field: 'account_number' });
+        }
+        // otherwise the random Tapnod ID clashed; try another
+      }
+    }
+    if (!c) return send(res, 500, { message: 'Could not create the account. Try again.' });
+    return send(res, 201, { token: sessions.issue(c.id), customer: publicCustomer(c) });
+  }
+
+  if (m === 'POST' && p === '/api/auth/login') {
+    const b = await readJson(req);
+    const c = await db.getCustomerByAccount(String(b?.account_number || '').replace(/\s/g, ''));
+    if (!c || !auth.checkPassword(String(b?.password || ''), c.password_hash)) {
+      return send(res, 401, { message: 'Account number or password is wrong.' });
+    }
+    return send(res, 200, { token: sessions.issue(c.id), customer: publicCustomer(c) });
+  }
+
+  // Fingerprint sign-in, step 1: a challenge. No account number needed: the passkey says who you are.
+  if (m === 'POST' && p === '/api/auth/passkey/login/options') {
+    const ch = auth.newChallenge('login');
+    return send(res, 200, { challenge_id: ch.id, challenge: ch.challenge, rp_id: siteOf(req).rpId });
+  }
+
+  // Fingerprint sign-in, step 2: check the signature.
+  if (m === 'POST' && p === '/api/auth/passkey/login') {
+    const b = await readJson(req);
+    const ch = auth.takeChallenge(b?.challenge_id, 'login');
+    if (!ch) return send(res, 400, { message: 'Sign-in expired. Try again.' });
+    const cred = await db.getCredential(String(b?.id || ''));
+    if (!cred) return send(res, 401, { message: 'This fingerprint isn\'t registered with Tapnod. Sign in with your account number.' });
+    try {
+      const { origin, rpId } = siteOf(req);
+      auth.verifyAssertion(b, cred, ch.challenge, origin, rpId);
+    } catch (e) {
+      if (e instanceof auth.WebAuthnError) return send(res, 401, { message: e.message });
+      throw e;
+    }
+    const c = await db.getCustomer(cred.customer_id);
+    return send(res, 200, { token: sessions.issue(c.id), customer: publicCustomer(c) });
+  }
+
+  /* ---------- the signed-in customer ---------- */
+
+  if (p.startsWith('/api/me') || p.startsWith('/api/customer/requests/')) {
+    const c = await signedInCustomer(req);
+    if (!c) return send(res, 401, { message: 'Please sign in.' });
+
+    if (m === 'GET' && p === '/api/me') {
+      const creds = await db.credentialsFor(c.id);
+      return send(res, 200, { customer: publicCustomer(c), has_fingerprint: creds.length > 0 });
+    }
+
+    if (m === 'GET' && p === '/api/me/latest') {
+      let latest = null;
+      for (const r of requests.values()) {
+        if (r.customer_id === c.id && (!latest || r.created_at_ms > latest.created_at_ms)) latest = r;
+      }
+      return send(res, 200, { request: latest ? forCustomer(refresh(latest), c) : null });
+    }
+
+    if (m === 'POST' && p === '/api/me/prefs') {
+      const b = await readJson(req);
+      const lang = LANGS.includes(b?.lang) ? b.lang : c.lang;
+      const voice = typeof b?.voice === 'string' ? b.voice.slice(0, 64) : c.voice;
+      await db.updatePrefs(c.id, lang, voice);
+      return send(res, 200, { prefs: { lang, voice } });
+    }
+
+    if (m === 'POST' && p === '/api/me/subscribe') {
+      const b = await readJson(req);
+      const s = b && b.subscription;
+      if (!s || typeof s.endpoint !== 'string' || !/^https:\/\//.test(s.endpoint) || !s.keys || !s.keys.p256dh || !s.keys.auth) {
+        return send(res, 400, { message: 'Bad subscription.' });
+      }
+      await db.saveSubscription(c.id, { endpoint: s.endpoint, keys: { p256dh: s.keys.p256dh, auth: s.keys.auth } });
+      return send(res, 200, { ok: true });
+    }
+
+    if (m === 'POST' && p === '/api/me/test-notification') {
+      const subs = await db.subscriptionsFor(c.id);
+      if (!subs.length) return send(res, 409, { message: 'Notifications are not set up on this phone yet.' });
+      const results = await Promise.all(subs.map((s) =>
+        push.send(s, { title: 'Tapnod', body: i18n.t(c.lang, 'sample'), url: '/app' }, vapid).catch(() => 0)));
+      return send(res, 200, { sent: results.filter((x) => x >= 200 && x < 300).length });
+    }
+
+    // Add a fingerprint to this account, step 1.
+    if (m === 'POST' && p === '/api/me/passkey/options') {
+      const ch = auth.newChallenge('register', { customer_id: c.id });
+      const existing = await db.credentialsFor(c.id);
+      return send(res, 200, {
+        challenge_id: ch.id, challenge: ch.challenge, rp_id: siteOf(req).rpId,
+        user: { id: auth.b64u.enc(Buffer.from(c.id)), name: c.tapnod_id, display_name: c.name },
+        exclude: existing.map((x) => x.id),
+      });
+    }
+
+    // Step 2: store the passkey's public key.
+    if (m === 'POST' && p === '/api/me/passkey') {
+      const b = await readJson(req);
+      const ch = auth.takeChallenge(b?.challenge_id, 'register');
+      if (!ch || ch.customer_id !== c.id) return send(res, 400, { message: 'Setup expired. Try again.' });
+      try {
+        const { origin, rpId } = siteOf(req);
+        const cred = auth.verifyRegistration(b, ch.challenge, origin, rpId);
+        await db.addCredential({ ...cred, customer_id: c.id, created_at: Date.now() });
+      } catch (e) {
+        if (e instanceof auth.WebAuthnError) return send(res, 400, { message: e.message });
+        throw e;
+      }
+      return send(res, 201, { ok: true });
+    }
+
+    // Approving a payment, step 1: a challenge tied to this payment.
+    if (m === 'POST' && (match = p.match(/^\/api\/customer\/requests\/([\w-]+)\/approve\/options$/))) {
+      const r = requests.get(match[1]);
+      if (!r || r.customer_id !== c.id) return send(res, 404, { message: 'Payment not found.' });
+      const creds = await db.credentialsFor(c.id);
+      if (!creds.length) return send(res, 409, { message: 'Set up your fingerprint first (Settings).' });
+      const ch = auth.newChallenge('approve', { customer_id: c.id, request_id: r.request_id });
+      return send(res, 200, { challenge_id: ch.id, challenge: ch.challenge, rp_id: siteOf(req).rpId, allow: creds.map((x) => x.id) });
+    }
+
+    // Step 2: the fingerprint signature approves the payment. Decline needs no fingerprint.
+    if (m === 'POST' && (match = p.match(/^\/api\/customer\/requests\/([\w-]+)\/(approve|decline)$/))) {
+      const r = requests.get(match[1]);
+      if (!r || r.customer_id !== c.id) return send(res, 404, { message: 'Payment not found.' });
+      if (refresh(r).status !== 'pending') {
+        return send(res, 409, { message: 'This payment is already ' + r.status + '.', request: forCustomer(r, c) });
+      }
+      const b = match[2] === 'approve' ? await readJson(req) : null;
+      // Phones without a fingerprint: approve with the account password instead.
+      if (b && b.password !== undefined) {
+        if ((await db.credentialsFor(c.id)).length) return send(res, 400, { message: 'Use your fingerprint to approve.' });
+        if (!auth.checkPassword(String(b.password), c.password_hash)) return send(res, 401, { message: 'Wrong password.' });
+      } else if (b) {
+        const ch = auth.takeChallenge(b?.challenge_id, 'approve');
+        if (!ch || ch.request_id !== r.request_id || ch.customer_id !== c.id) {
+          return send(res, 400, { message: 'Approval expired. Try again.' });
+        }
+        const cred = await db.getCredential(String(b?.id || ''));
+        if (!cred || cred.customer_id !== c.id) return send(res, 401, { message: 'That fingerprint isn\'t on this account.' });
+        try {
+          const { origin, rpId } = siteOf(req);
+          auth.verifyAssertion(b, cred, ch.challenge, origin, rpId);
+        } catch (e) {
+          if (e instanceof auth.WebAuthnError) return send(res, 401, { message: e.message });
+          throw e;
+        }
+      }
+      r.status = match[2] === 'approve' ? 'approved' : 'declined';
+      return send(res, 200, { request: forCustomer(r, c) });
+    }
+
+    return send(res, 404, { message: 'Not found.' });
+  }
+
+  /* ---------- POS ---------- */
+
+  if (m === 'GET' && p === '/api/pos/customers') {
+    const list = await db.listCustomers();
+    return send(res, 200, {
+      customers: list.map((c) => ({ id: c.id, name: c.name, note: `${c.tapnod_id} · acct ${mask(c.account_number)}` })),
+    });
+  }
 
   if (m === 'POST' && p === '/api/pos/cards/link') {
     const b = await readJson(req);
-    if (!b || !b.card_token || !customers.some((c) => c.id === b.customer_id)) {
-      return send(res, 400, { message: 'Pick a customer and tap a card.' });
-    }
-    cards.set(b.card_token, b.customer_id);
+    const c = b && b.customer_id ? await db.getCustomer(b.customer_id) : null;
+    if (!b || !b.card_token || !c) return send(res, 400, { message: 'Pick a customer and tap a card.' });
+    await db.linkCard(b.card_token, c.id);
     return send(res, 200, { ok: true });
   }
 
+  // A charge, either from a card read (card_token) or from picking the customer on the POS (customer_id).
   if (m === 'POST' && p === '/api/pos/requests') {
     const b = await readJson(req);
-    if (!b || !Number.isInteger(b.amount_kobo) || b.amount_kobo <= 0 || !b.card_token) {
-      return send(res, 400, { message: 'Amount and card are required.' });
+    if (!b || !Number.isInteger(b.amount_kobo) || b.amount_kobo <= 0 || (!b.card_token && !b.customer_id)) {
+      return send(res, 400, { message: 'Amount and a card or customer are required.' });
     }
-    let customerId = cards.get(b.card_token);
-    if (!customerId && customers.some((c) => c.id === DEMO_AUTO_LINK)) {
-      customerId = DEMO_AUTO_LINK;
-      cards.set(b.card_token, customerId);
+    let customer = null;
+    if (b.customer_id) {
+      customer = await db.getCustomer(b.customer_id);
+      if (!customer) return send(res, 404, { message: 'That customer is not on Tapnod.' });
+    } else {
+      const owner = await db.cardOwner(b.card_token);
+      if (owner) customer = await db.getCustomer(owner);
+      if (!customer && DEMO_AUTO_LINK) {
+        customer = DEMO_AUTO_LINK === 'latest' ? (await db.listCustomers())[0] : await db.getCustomer(DEMO_AUTO_LINK);
+        if (customer) await db.linkCard(b.card_token, customer.id);
+      }
+      if (!customer) return send(res, 404, { error: 'card_not_linked', message: 'Card not linked to Tapnod.' });
     }
-    if (!customerId) return send(res, 404, { error: 'card_not_linked', message: 'Card not linked to Tapnod.' });
 
     for (const r of requests.values()) {
-      if (r.customer_id === customerId && r.status === 'pending') r.status = 'cancelled';
+      if (r.customer_id === customer.id && r.status === 'pending') r.status = 'cancelled';
     }
-
     const id = 'req_' + crypto.randomBytes(4).toString('hex');
     const r = {
-      request_id: id,
-      customer_id: customerId,
-      amount_kobo: b.amount_kobo,
-      currency: b.currency || 'NGN',
-      merchant_name: b.merchant_name || 'Merchant',
-      terminal_id: b.terminal_id || req.headers['x-terminal-id'] || '',
-      card_last4: b.card_last4 || '',
-      card_scheme: b.card_scheme || 'CARD',
-      status: 'pending',
-      reference: 'TPN-' + id.slice(-6).toUpperCase(),
-      created_at_ms: Date.now(),
-      expires_at_ms: Date.now() + REQUEST_TTL_MS,
-      audio: null,
+      request_id: id, customer_id: customer.id, amount_kobo: b.amount_kobo, currency: b.currency || 'NGN',
+      merchant_name: b.merchant_name || 'Merchant', terminal_id: b.terminal_id || req.headers['x-terminal-id'] || '',
+      card_last4: b.card_last4 || '', card_scheme: b.card_scheme || '',
+      status: 'pending', reference: 'TPN-' + id.slice(-6).toUpperCase(),
+      created_at_ms: Date.now(), expires_at_ms: Date.now() + REQUEST_TTL_MS, audio: null,
     };
     requests.set(id, r);
-    notify(r);
-    prepareAudio(r);
-    const name = customers.find((c) => c.id === customerId).name;
-    return send(res, 201, { request_id: id, customer_name: name, expires_at_ms: r.expires_at_ms });
+    for (const [k, old] of requests) if (Date.now() - old.created_at_ms > 3600_000) requests.delete(k);
+    notify(r, customer);
+    prepareAudio(r, customer);
+    return send(res, 201, { request_id: id, customer_name: customer.name, expires_at_ms: r.expires_at_ms });
   }
 
   if (m === 'GET' && (match = p.match(/^\/api\/pos\/requests\/([\w-]+)$/))) {
@@ -235,75 +414,22 @@ async function route(req, res) {
     return send(res, 200, { ok: true });
   }
 
-  // ---- customer side (the web app) ----
-  if ((match = p.match(/^\/api\/customer\/([\w-]+)(\/.*)?$/)) && !p.startsWith('/api/customer/requests/')) {
-    const c = customers.find((x) => x.id === match[1]);
-    if (!c) return send(res, 404, { message: 'Unknown customer.' });
-    const sub = match[2] || '';
-
-    if (m === 'GET' && sub === '') return send(res, 200, { id: c.id, name: c.name, prefs: prefsFor(c.id) });
-
-    if (m === 'GET' && sub === '/latest') {
-      let latest = null;
-      for (const r of requests.values()) {
-        if (r.customer_id === c.id && (!latest || r.created_at_ms > latest.created_at_ms)) latest = r;
-      }
-      return send(res, 200, { request: latest ? forCustomer(refresh(latest)) : null });
-    }
-
-    if (m === 'POST' && sub === '/prefs') {
-      const b = await readJson(req);
-      if (!b) return send(res, 400, { message: 'Bad JSON.' });
-      const next = {
-        lang: LANGS.includes(b.lang) ? b.lang : 'en',
-        voice: typeof b.voice === 'string' ? b.voice.slice(0, 64) : '',
-      };
-      prefs.set(c.id, next);
-      return send(res, 200, { prefs: next });
-    }
-
-    if (m === 'POST' && sub === '/subscribe') {
-      const b = await readJson(req);
-      const s = b && b.subscription;
-      if (!s || typeof s.endpoint !== 'string' || !/^https:\/\//.test(s.endpoint) || !s.keys || !s.keys.p256dh || !s.keys.auth) {
-        return send(res, 400, { message: 'Bad subscription.' });
-      }
-      if (!subscriptions.has(c.id)) subscriptions.set(c.id, new Map());
-      subscriptions.get(c.id).set(s.endpoint, { endpoint: s.endpoint, keys: { p256dh: s.keys.p256dh, auth: s.keys.auth } });
-      return send(res, 200, { ok: true });
-    }
-
-    if (m === 'POST' && sub === '/test-notification') {
-      const subs = subscriptions.get(c.id);
-      if (!subs || !subs.size) return send(res, 409, { message: 'Notifications are not set up on this phone yet.' });
-      const { lang } = prefsFor(c.id);
-      const results = await Promise.all([...subs.values()].map((s) =>
-        push.send(s, { title: 'Tapnod', body: i18n.t(lang, 'sample'), url: '/?c=' + c.id }, vapid).catch(() => 0)));
-      return send(res, 200, { sent: results.filter((x) => x >= 200 && x < 300).length });
-    }
-  }
-
-  if (m === 'POST' && (match = p.match(/^\/api\/customer\/requests\/([\w-]+)\/(approve|decline)$/))) {
-    const r = requests.get(match[1]);
-    if (!r) return send(res, 404, { message: 'Request not found.' });
-    if (refresh(r).status !== 'pending') {
-      return send(res, 409, { message: 'This payment is already ' + r.status + '.', request: forCustomer(r) });
-    }
-    r.status = match[2] === 'approve' ? 'approved' : 'declined';
-    return send(res, 200, { request: forCustomer(r) });
-  }
-
   send(res, 404, { message: 'Not found.' });
 }
 
-http
-  .createServer((req, res) => {
-    route(req, res).catch((e) => {
-      console.error(e);
-      send(res, 500, { message: 'Something went wrong on Tapnod.' });
+db.init().then(() => {
+  http
+    .createServer((req, res) => {
+      route(req, res).catch((e) => {
+        console.error(e);
+        send(res, 500, { message: 'Something went wrong on Tapnod.' });
+      });
+    })
+    .listen(PORT, () => {
+      console.log(`Tapnod running on http://localhost:${PORT} (storage: ${db.kind})`);
+      console.log(`Nigerian voices (YarnGPT): ${tts.enabled() ? 'on' : 'off, set YARNGPT_API_KEY to switch on'}`);
     });
-  })
-  .listen(PORT, () => {
-    console.log(`Tapnod demo running on http://localhost:${PORT}`);
-    console.log(`Nigerian voices (YarnGPT): ${tts.enabled() ? 'on' : 'off, set YARNGPT_API_KEY to switch on'}`);
-  });
+}).catch((e) => {
+  console.error('Could not start the database:', e.message);
+  process.exit(1);
+});

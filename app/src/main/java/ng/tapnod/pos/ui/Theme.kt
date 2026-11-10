@@ -1,6 +1,7 @@
 package ng.tapnod.pos.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -32,23 +33,29 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ng.tapnod.pos.R
 
-/** Swiss palette: paper ground, black ink, one lime accent, one signal red. */
+/**
+ * Swiss, classic bank palette, shared with the customer web app:
+ * warm paper ground, white cards with hairline borders, black ink, one calm green.
+ */
 object TP {
-    val Ground = Color(0xFFE8E8E3)
+    val Ground = Color(0xFFF4F4F0)
     val Paper = Color(0xFFFFFFFF)
-    val Soft = Color(0xFFF4F4F0)
-    val Line = Color(0xFFD9D9D3)
-    val Ink = Color(0xFF0B0B0B)
+    val Soft = Color(0xFFECECE6)
+    val Line = Color(0xFFE2E2DC)
+    val Ink = Color(0xFF0E0E0E)
     val InkRaised = Color(0xFF242424)
-    val Mute = Color(0xFF66665F)
-    val InkMute = Color(0xFFA3A39C)
-    val Lime = Color(0xFFC8F031)
-    val Red = Color(0xFFE4002B)
+    val Mute = Color(0xFF6B6B66)
+    val InkMute = Color(0xFFA7A7A0)
+    /** Highlight: soft green fill under black text, or soft green text on black. (Was a bright lime.) */
+    val Lime = Color(0xFFDCEBE1)
+    /** Brand green, for small marks: the logo dot, live indicators. */
+    val Accent = Color(0xFF0B6B3A)
+    val Red = Color(0xFFB42318)
     val White = Color(0xFFFFFFFF)
 }
 
-val GAP: Dp = 8.dp
-val TileShape = RoundedCornerShape(22.dp)
+val GAP: Dp = 10.dp
+val TileShape = RoundedCornerShape(14.dp)
 
 @OptIn(ExperimentalTextApi::class)
 val Inter = FontFamily(
@@ -92,6 +99,8 @@ fun Tile(
     content: @Composable BoxScope.() -> Unit
 ) {
     var m = modifier.clip(TileShape).background(color)
+    // Light cards get a hairline border, like the web app; dark and coloured ones don't need it.
+    if (color == TP.Paper || color == TP.Soft) m = m.border(1.dp, TP.Line, TileShape)
     if (onClick != null) {
         m = m.clickable(onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)
     }
@@ -119,7 +128,7 @@ fun BrandMark(modifier: Modifier = Modifier, dark: Boolean = true) {
             Modifier
                 .size(14.dp)
                 .clip(CircleShape)
-                .background(TP.Lime)
+                .background(TP.Accent)
         )
         Spacer(Modifier.width(8.dp))
         Text(
