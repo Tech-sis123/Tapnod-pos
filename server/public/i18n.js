@@ -43,16 +43,16 @@
   const LANGS = {
     en: {
       name: 'English',
-      ask: '{m} is asking you to pay {a}. Approve with your fingerprint, or decline.',
+      ask: '{m} is asking you to pay {a}. Approve with your {bio}, or decline.',
       notifTitle: 'Pay {a} to {m}?',
-      notifBody: 'Tap to approve with your fingerprint.',
+      notifBody: 'Tap to approve with your {bio}.',
       approved: 'Payment approved. You paid {a} to {m}.',
       declined: 'Payment declined. No money left your account.',
       expired: 'The payment timed out. No money left your account.',
       cancelled: '{m} cancelled this payment. No money left your account.',
       waiting: 'Waiting for a payment',
       waitingBody: 'Keep this page open, or allow notifications. When a shop charges your card, Tapnod tells you.',
-      approve: 'Approve with fingerprint',
+      approve: 'Approve with {bio}',
       decline: 'Decline',
       repeat: 'Repeat',
       done: 'Done',
@@ -158,10 +158,14 @@
     },
   };
 
+  // What the phone calls its biometric check: "Face ID" on iPhone, "fingerprint" on most Android phones.
+  let bio = 'fingerprint or face';
+  function setBio(word) { bio = word; }
+
   function t(lang, key, vars) {
     const table = LANGS[lang] || LANGS.en;
     let s = table[key] != null ? table[key] : LANGS.en[key];
-    for (const [k, v] of Object.entries(vars || {})) s = s.split('{' + k + '}').join(v);
+    for (const [k, v] of Object.entries({ bio, ...(vars || {}) })) s = s.split('{' + k + '}').join(v);
     return s;
   }
 
@@ -174,7 +178,7 @@
     };
   }
 
-  const api = { LANGS, t, sayFor, moneyText, moneyWords, moneySpoken };
+  const api = { LANGS, t, sayFor, setBio, moneyText, moneyWords, moneySpoken };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TapnodI18n = api;
 })(typeof self !== 'undefined' ? self : this);
