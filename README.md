@@ -36,6 +36,12 @@ This repo holds the whole demo:
 
 The card number never leaves the POS phone. It is turned into a one-way token (HMAC-SHA256) the moment it's read, and only the last 4 digits are shown.
 
+## Fastest demo (laptop + phone)
+
+1. **POS on the laptop:** open `https://<your-link>/pos` in any browser. Type the amount (keyboard works), press Charge, then **Card tapped** or **Choose customer**. A USB card reader that types the card ID also works.
+2. **Customer phone:** open `https://<your-link>/app`, tap **Create an account**: name, 10-digit account number, a **4-digit PIN**. Done.
+3. The phone reads the payment aloud. The customer taps **Approve** and enters the PIN on a big keypad. The voice says how many digits were typed, never which ones. Face ID or fingerprint is optional, in Settings.
+
 ## Quick start
 
 ### 1. Put the backend online (free, about 5 minutes)

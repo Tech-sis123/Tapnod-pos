@@ -53,6 +53,7 @@ function siteOf(req) {
 const STATIC = {
   '/': ['landing.html', 'text/html; charset=utf-8'],
   '/app': ['app.html', 'text/html; charset=utf-8'],
+  '/pos': ['pos.html', 'text/html; charset=utf-8'],
   '/tapnod.css': ['tapnod.css', 'text/css; charset=utf-8'],
   '/i18n.js': ['i18n.js', 'application/javascript; charset=utf-8'],
   '/sw.js': ['sw.js', 'application/javascript; charset=utf-8'],
@@ -172,10 +173,11 @@ async function route(req, res) {
     const name = String(b?.name || '').trim().slice(0, 80);
     const account = String(b?.account_number || '').replace(/\s/g, '');
     const phone = String(b?.phone || '').replace(/[^\d+]/g, '').slice(0, 16);
-    const password = String(b?.password || '');
+    // A 4-digit app PIN, like Cowrywise and most Nigerian banking apps. (A longer password still works.)
+    const password = String(b?.pin ?? b?.password ?? '');
     if (name.length < 2) return send(res, 400, { message: 'Enter your full name.', field: 'name' });
     if (!/^\d{10}$/.test(account)) return send(res, 400, { message: 'Account number must be 10 digits.', field: 'account_number' });
-    if (password.length < 6) return send(res, 400, { message: 'Password must be at least 6 characters.', field: 'password' });
+    if (!/^\d{4}$/.test(password) && password.length < 6) return send(res, 400, { message: 'Your PIN must be 4 digits.', field: 'pin' });
     const lang = LANGS.includes(b?.lang) ? b.lang : 'en';
     let c = null;
     for (let i = 0; i < 5 && !c; i++) {
@@ -200,8 +202,8 @@ async function route(req, res) {
   if (m === 'POST' && p === '/api/auth/login') {
     const b = await readJson(req);
     const c = await db.getCustomerByAccount(String(b?.account_number || '').replace(/\s/g, ''));
-    if (!c || !auth.checkPassword(String(b?.password || ''), c.password_hash)) {
-      return send(res, 401, { message: 'Account number or password is wrong.' });
+    if (!c || !auth.checkPassword(String(b?.pin ?? b?.password ?? ''), c.password_hash)) {
+      return send(res, 401, { message: 'Account number or PIN is wrong.' });
     }
     return send(res, 200, { token: sessions.issue(c.id), customer: publicCustomer(c) });
   }
@@ -321,8 +323,8 @@ async function route(req, res) {
       }
       const b = match[2] === 'approve' ? await readJson(req) : null;
       // Password approval: for phones without a biometric, or when it misbehaves.
-      if (b && b.password !== undefined) {
-        if (!auth.checkPassword(String(b.password), c.password_hash)) return send(res, 401, { message: 'Wrong password.' });
+      if (b && (b.pin !== undefined || b.password !== undefined)) {
+        if (!auth.checkPassword(String(b.pin ?? b.password), c.password_hash)) return send(res, 401, { message: 'Wrong PIN. Try again.' });
       } else if (b) {
         const ch = auth.takeChallenge(b?.challenge_id, 'approve');
         if (!ch || ch.request_id !== r.request_id || ch.customer_id !== c.id) {

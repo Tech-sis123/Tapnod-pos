@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tapnod POS</title>
+<link rel="icon" href="/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/tapnod.css">
+<style>
+  body { min-height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 0 28px; height: 68px; border-bottom: 1px solid var(--line); background: var(--paper); }
+  .wrap { flex: 1; display: grid; grid-template-columns: 1fr 380px; gap: 16px; padding: 20px 28px; max-width: 1180px; width: 100%; margin: 0 auto; }
+  .main { display: flex; flex-direction: column; gap: 16px; }
+  .screen { display: none; flex-direction: column; gap: 16px; flex: 1; }
+  .screen.on { display: flex; }
+  .display { padding: 28px; }
+  .display .amount { font-size: clamp(56px, 8vw, 96px); margin-top: 10px; }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .key { font: inherit; font-size: 30px; font-weight: 600; min-height: 76px; border-radius: 14px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+  .key:active { background: var(--paper); }
+  .big-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .big-actions .btn { min-height: 120px; font-size: 22px; flex-direction: column; gap: 6px; }
+  .big-actions .btn small { font-size: 14px; font-weight: 500; opacity: .75; }
+  .side { display: flex; flex-direction: column; gap: 16px; }
+  .list { max-height: 420px; overflow: auto; }
+  .bar { height: 4px; background: var(--line); border-radius: 4px; overflow: hidden; margin-top: 18px; }
+  .bar i { display: block; height: 100%; background: var(--ink); width: 100%; transition: width 1s linear; }
+  .result { text-align: center; padding: 48px 28px; }
+  .r-icon { width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; font-size: 46px; font-weight: 700; color: #fff; margin: 0 auto 16px; background: var(--accent); }
+  .r-icon.bad { background: var(--red); }
+  .status-row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .receipt td { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+  .receipt td:last-child { text-align: right; font-weight: 600; }
+  kbd { font: inherit; font-size: 12px; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div style="display:flex;align-items:center;gap:14px"><a class="logo" href="/">tapnod</a><span class="pill grey">POS</span></div>
+  <div class="status-row"><span class="pill" id="conn"><i class="dot live"></i>Connecting…</span><span class="small" id="merchant-label">Bisi Ventures</span></div>
+</header>
+
+<div class="wrap">
+  <div class="main">
+
+    <!-- 1. Amount -->
+    <section class="screen on" id="s-amount">
+      <div class="card display">
+        <div class="eyebrow">Step 1 of 3 · Amount</div>
+        <div class="amount mono" id="amount">₦0</div>
+        <p class="small" style="margin-top:8px">Type with the keypad or your keyboard. <kbd>Enter</kbd> to charge.</p>
+      </div>
+      <div class="keypad" id="keypad"></div>
+      <button class="btn btn-primary" id="charge" style="min-height:64px;font-size:20px" disabled>Charge</button>
+    </section>
+
+    <!-- 2. Card -->
+    <section class="screen" id="s-card">
+      <div class="card display">
+        <div class="eyebrow">Step 2 of 3 · Card</div>
+        <div class="h1" style="margin-top:12px">Tap the customer's card</div>
+        <p class="body" style="margin-top:10px">Charging <b id="card-amount">₦0</b>. Tap the card on the reader, or pick the customer.</p>
+      </div>
+      <div class="big-actions">
+        <button class="btn btn-primary" id="tapped">Card tapped<small>Customer's Tapnod card</small></button>
+        <button class="btn" id="pick">Choose customer<small>Find by name or Tapnod ID</small></button>
+      </div>
+      <p class="small">A USB card reader works too: it types the card ID and presses Enter.</p>
+      <button class="btn btn-link" id="cancel-card">Cancel</button>
+    </section>
+
+    <!-- 2b. Pick customer -->
+    <section class="screen" id="s-pick">
+      <div class="card display">
+        <div class="eyebrow">Step 2 of 3 · Customer</div>
+        <div class="h2" style="margin-top:12px">Who is paying?</div>
+        <input class="input" id="search" placeholder="Search name or Tapnod ID" style="margin-top:14px">
+      </div>
+      <div class="list" id="customers"></div>
+      <button class="btn btn-link" id="cancel-pick">Back</button>
+    </section>
+
+    <!-- 3. Waiting -->
+    <section class="screen" id="s-wait">
+      <div class="card ink display">
+        <div class="eyebrow">Step 3 of 3 · Waiting for customer</div>
+        <div class="amount mono" style="margin-top:12px" id="wait-amount">₦0</div>
+        <p class="body" style="margin-top:12px" id="wait-text">Sent to the customer's phone. They hear the amount and approve it.</p>
+        <div class="bar" style="background:#333"><i id="wait-bar" style="background:#8fe0a8"></i></div>
+        <p class="small" style="margin-top:8px" id="wait-left"></p>
+      </div>
+      <button class="btn" id="cancel-wait">Cancel payment</button>
+    </section>
+
+    <!-- 4. Result -->
+    <section class="screen" id="s-result">
+      <div class="card result">
+        <div class="r-icon" id="r-icon">✓</div>
+        <div class="h1" id="r-title">Payment approved</div>
+        <p class="lead" style="margin-top:10px" id="r-body"></p>
+      </div>
+      <button class="btn btn-primary" id="new-sale" style="min-height:64px;font-size:20px">New sale</button>
+    </section>
+  </div>
+
+  <aside class="side">
+    <div class="card">
+      <div class="eyebrow">How it works</div>
+      <ol class="body" style="margin:12px 0 0 18px;display:grid;gap:8px">
+        <li>Type the amount and press Charge.</li>
+        <li>The customer taps their card. No PIN at the counter.</li>
+        <li>Their phone reads the amount aloud; they approve it on their own phone.</li>
+      </ol>
+    </div>
+    <div class="card" id="last-card" hidden>
+      <div class="eyebrow">Last receipt</div>
+      <table class="receipt" style="width:100%;margin-top:8px;border-collapse:collapse"><tbody id="receipt"></tbody></table>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Settings</div>
+      <div class="field" style="margin-top:12px"><label for="merchant">Merchant name</label><input class="input" id="merchant"></div>
+      <label style="display:flex;gap:10px;align-items:center;margin-top:12px;font-size:15px"><input type="checkbox" id="voice" checked> Speak results</label>
+    </div>
+  </aside>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const TTL = 120000;
+const store = JSON.parse(localStorage.getItem('tapnod_pos') || '{}');
+const settings = Object.assign({ merchant: 'Bisi Ventures', voice: true, terminal: 'TPN-WEB-' + Math.random().toString(36).slice(2, 6).toUpperCase() }, store);
+const save = () => localStorage.setItem('tapnod_pos', JSON.stringify(settings));
+save();
+$('merchant').value = settings.merchant; $('voice').checked = settings.voice; $('merchant-label').textContent = settings.merchant;
+$('merchant').oninput = (e) => { settings.merchant = e.target.value || 'Merchant'; $('merchant-label').textContent = settings.merchant; save(); };
+$('voice').onchange = (e) => { settings.voice = e.target.checked; save(); };
+
+let digits = '', sale = null, poll = null, timer = null, customers = [];
+const naira = () => Number(digits || '0');
+const fmt = (n) => '₦' + n.toLocaleString('en-NG');
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.id === id));
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+}
+function say(t) {
+  if (!settings.voice || !('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(t);
+  const v = speechSynthesis.getVoices().find((x) => x.lang === 'en-NG') || speechSynthesis.getVoices().find((x) => x.lang.startsWith('en'));
+  if (v) u.voice = v;
+  speechSynthesis.speak(u);
+}
+async function api(path, body) {
+  const r = await fetch(path, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', 'X-Terminal-Id': settings.terminal }, body: body ? JSON.stringify(body) : undefined });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(data.message || 'Something went wrong.'); e.status = r.status; e.data = data; throw e; }
+  return data;
+}
+
+/* ---------- amount ---------- */
+function renderAmount() { $('amount').textContent = fmt(naira()); $('charge').disabled = naira() <= 0; }
+function press(k) {
+  if (!$('s-amount').classList.contains('on')) return;
+  if (k === 'C') digits = '';
+  else if (k === '⌫') digits = digits.slice(0, -1);
+  else if (digits.length < 9) digits = (digits + k).replace(/^0+/, '');
+  renderAmount();
+}
+for (const k of ['1','2','3','4','5','6','7','8','9','C','0','⌫']) {
+  const b = document.createElement('button'); b.className = 'key'; b.textContent = k;
+  b.setAttribute('aria-label', k === 'C' ? 'Clear' : k === '⌫' ? 'Delete' : k);
+  b.onclick = () => press(k); $('keypad').appendChild(b);
+}
+$('charge').onclick = () => { if (naira() > 0) { $('card-amount').textContent = fmt(naira()); show('s-card'); say('Tap the customer\'s card.'); } };
+
+/* ---------- card / customer ---------- */
+// The demo card. The server links an unknown card to the most recent sign-up (DEMO_AUTO_LINK).
+$('tapped').onclick = () => charge({ card_token: 'tapnod-demo-card', card_last4: '4821', card_scheme: 'TAPNOD' });
+$('pick').onclick = async () => {
+  show('s-pick'); $('customers').innerHTML = '<div class="row-item">Loading customers…</div>';
+  try { customers = (await api('/api/pos/customers')).customers; renderCustomers(); }
+  catch (e) { $('customers').innerHTML = '<div class="row-item">' + e.message + '</div>'; }
+  $('search').value = ''; $('search').focus();
+};
+function renderCustomers() {
+  const q = $('search').value.trim().toLowerCase();
+  const list = customers.filter((c) => !q || c.name.toLowerCase().includes(q) || c.note.toLowerCase().includes(q));
+  $('customers').innerHTML = '';
+  if (!list.length) { $('customers').innerHTML = '<div class="row-item">No customers yet. Sign one up at /app.</div>'; return; }
+  for (const c of list) {
+    const b = document.createElement('button'); b.className = 'row-item';
+    b.innerHTML = '<span><span class="t"></span><span class="s"></span></span><span class="small">Charge →</span>';
+    b.querySelector('.t').textContent = c.name; b.querySelector('.s').textContent = c.note;
+    b.onclick = () => charge({ customer_id: c.id, card_last4: '', card_scheme: '' });
+    $('customers').appendChild(b);
+  }
+}
+$('search').oninput = renderCustomers;
+$('cancel-card').onclick = $('cancel-pick').onclick = () => show('s-amount');
+
+async function charge(extra) {
+  show('s-wait');
+  $('wait-amount').textContent = fmt(naira());
+  $('wait-text').textContent = 'Sending to the customer\'s phone…';
+  try {
+    const r = await api('/api/pos/requests', { amount_kobo: naira() * 100, currency: 'NGN', merchant_id: 'BISI-001', merchant_name: settings.merchant, terminal_id: settings.terminal, ...extra });
+    sale = { id: r.request_id, name: r.customer_name, expires: r.expires_at_ms, amount: naira(), card: extra.card_last4 ? 'Card ···· ' + extra.card_last4 : 'Picked on POS' };
+    $('wait-text').textContent = 'Sent to ' + r.customer_name + '\'s phone. They hear the amount and approve it.';
+    say('Sent to ' + r.customer_name + '. Waiting for approval.');
+    clearInterval(poll); clearInterval(timer);
+    timer = setInterval(tick, 1000); tick();
+    poll = setInterval(check, 700);
+  } catch (e) {
+    finish('failed', e.status === 404 ? 'No customer has signed up yet. Sign one up at /app, then try again.' : e.message);
+  }
+}
+function tick() {
+  if (!sale) return;
+  const left = Math.max(0, sale.expires - Date.now());
+  $('wait-bar').style.width = (left / TTL * 100) + '%';
+  $('wait-left').textContent = Math.ceil(left / 1000) + ' seconds left';
+}
+async function check() {
+  if (!sale) return;
+  try {
+    const r = await api('/api/pos/requests/' + sale.id);
+    if (r.status !== 'pending') { sale.reference = r.reference; finish(r.status); }
+  } catch {}
+}
+$('cancel-wait').onclick = async () => { if (sale) { try { await api('/api/pos/requests/' + sale.id + '/cancel', {}); } catch {} } finish('cancelled'); };
+
+function finish(status, message) {
+  clearInterval(poll); clearInterval(timer);
+  const ok = status === 'approved';
+  const titles = { approved: 'Payment approved', declined: 'Declined by customer', expired: 'Timed out', cancelled: 'Cancelled', failed: 'Couldn\'t send' };
+  $('r-icon').textContent = ok ? '✓' : '✕';
+  $('r-icon').className = 'r-icon' + (ok ? '' : ' bad');
+  $('r-title').textContent = titles[status] || status;
+  $('r-body').textContent = message || (sale ? fmt(sale.amount) + ' · ' + sale.name + (sale.reference ? ' · ' + sale.reference : '') : '');
+  show('s-result');
+  say(ok ? 'Payment approved. ' + sale.amount + ' naira.' : titles[status] || '');
+  if (sale && status !== 'failed') {
+    $('last-card').hidden = false;
+    $('receipt').innerHTML = '';
+    for (const [k, v] of [['Status', titles[status]], ['Amount', fmt(sale.amount)], ['Customer', sale.name], ['Paid with', sale.card], ['Reference', sale.reference || '—'], ['Merchant', settings.merchant], ['Time', new Date().toLocaleTimeString()]]) {
+      const tr = document.createElement('tr'); tr.innerHTML = '<td></td><td></td>'; tr.children[0].textContent = k; tr.children[1].textContent = v; $('receipt').appendChild(tr);
+    }
+  }
+  sale = null;
+}
+$('new-sale').onclick = () => { digits = ''; renderAmount(); show('s-amount'); };
+
+/* ---------- keyboard: amount entry, and USB card readers (they type the card ID + Enter) ---------- */
+let swipe = '', swipeAt = 0;
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'Enter') e.preventDefault(); // don't also "click" whichever button has focus
+  if ($('s-amount').classList.contains('on')) {
+    if (/^\d$/.test(e.key)) press(e.key);
+    else if (e.key === 'Backspace') press('⌫');
+    else if (e.key === 'Escape') press('C');
+    else if (e.key === 'Enter') $('charge').click();
+    return;
+  }
+  if ($('s-card').classList.contains('on')) {
+    const now = Date.now();
+    if (now - swipeAt > 300) swipe = '';
+    swipeAt = now;
+    if (e.key === 'Enter' && swipe.length >= 4) {
+      charge({ card_token: 'reader-' + swipe, card_last4: swipe.slice(-4), card_scheme: 'CARD' });
+      swipe = '';
+    } else if (e.key.length === 1) swipe += e.key;
+  }
+});
+
+/* ---------- connection ---------- */
+async function ping() {
+  try { await api('/healthz'); $('conn').className = 'pill'; $('conn').innerHTML = '<i class="dot live"></i>Live · connected'; }
+  catch { $('conn').className = 'pill off'; $('conn').innerHTML = '<i class="dot"></i>Offline'; }
+}
+ping(); setInterval(ping, 15000);
+renderAmount();
+</script>
+</body>
+</html>
