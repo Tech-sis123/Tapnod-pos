@@ -1,0 +1,53 @@
+# Tapnod on the Forge 2026 sandbox. Follows the guide's reference manifest (section 4.2):
+# Deployment "app" on port 8080, Service "app" on port 80 -> https://teamXX.xtradot.co
+#
+#   export KUBECONFIG=~/forge/teamXX.yaml
+#   kubectl apply -f k8s/app.yaml
+#   kubectl rollout status deployment/app
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: app }
+  template:
+    metadata:
+      labels: { app: app }
+    spec:
+      # Only needed if the GHCR package is private (see README, "Deploy to the Forge sandbox"):
+      # imagePullSecrets: [{ name: regcred }]
+      containers:
+      - name: app
+        image: ghcr.io/tech-sis123/tapnod:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        env:
+        - { name: PORT, value: "8080" }
+        - { name: TOKEN_SECRET, value: "tapnod-demo-secret" }
+        - { name: DEMO_AUTO_LINK, value: "latest" }
+        # Data is kept in memory in the sandbox (one replica). Add DATABASE_URL to use Postgres.
+        envFrom:
+        - secretRef: { name: huawei-gateway, optional: true }
+        readinessProbe:
+          httpGet: { path: /healthz, port: 8080 }
+          periodSeconds: 5
+        livenessProbe:
+          httpGet: { path: /healthz, port: 8080 }
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        resources:
+          requests: { cpu: 50m, memory: 128Mi }
+          limits: { cpu: 500m, memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app
+spec:
+  selector: { app: app }
+  ports:
+  - port: 80
+    targetPort: 8080
