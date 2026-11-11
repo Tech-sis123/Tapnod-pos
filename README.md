@@ -1,8 +1,10 @@
 # Tapnod
 
-**Tapnod makes card payments accessible.** When a shop charges your card, your own phone tells you out loud, in your language, who is charging you and how much. You approve with your fingerprint. Nobody else has to read the amount for you, and nobody needs your PIN.
+**Accessible card payments for everyone.** When a shop charges your card, Tapnod tells you out loud, on your own phone and in your language (English, Pidgin, Yorùbá, Igbo or Hausa), who is charging you and how much. You approve with your fingerprint. Nobody else has to read the POS screen for you, and nobody needs your PIN.
 
-Built for people the usual POS flow leaves out: blind and low-vision customers, people who can't read the small screen, and anyone who doesn't trust a stranger to read an amount for them.
+Built for the people the usual POS flow leaves out: blind and low-vision customers, people who prefer their own language, older customers, and anyone who doesn't want to hand their card and PIN to a stranger.
+
+**Live:** [tapnod-demo.onrender.com](https://tapnod-demo.onrender.com) · Forge sandbox: `https://teamXX.xtradot.co` (see [Deploy to the Forge sandbox](#deploy-to-the-forge-2026-sandbox))
 
 This repo holds the whole demo:
 
@@ -184,6 +186,29 @@ Create-request body:
 **Other:** `GET /healthz`, `GET /api/config`, `GET /api/voices`, `POST /api/tts`.
 
 Errors return `{ "message": "..." }`, and the POS shows that message.
+
+## Deploy to the Forge 2026 sandbox
+
+The backend (landing page, customer app and API) runs as one container. Every push to `main` that touches `server/` builds it for `linux/amd64` and publishes it to **`ghcr.io/tech-sis123/tapnod:latest`** (`.github/workflows/server-image.yml`). `k8s/app.yaml` follows the guide's reference manifest: Deployment `app` on port 8080, Service `app` on port 80, health check `/healthz`.
+
+**Once:** make the image public so the cluster can pull it. On GitHub, open your profile, then **Packages**, then **tapnod**, then **Package settings**, then **Change visibility** and choose **Public**. Or keep it private and create a pull secret (guide 4.1), then uncomment `imagePullSecrets` in `k8s/app.yaml`.
+
+**Deploy** (team lead, with the kubeconfig from the organisers):
+
+```bash
+export KUBECONFIG=~/forge/teamXX.yaml        # the file you were sent
+kubectl apply -f k8s/app.yaml
+kubectl rollout status deployment/app
+curl -I https://teamXX.xtradot.co            # 200 = live
+```
+
+**Update after a new push:** `kubectl rollout restart deployment/app` (the manifest always pulls `latest`).
+
+**Logs:** `kubectl logs deploy/app -f`
+
+Notes: in the sandbox, data is kept in memory (one replica), so accounts reset if the pod restarts. Add a `DATABASE_URL` to use Postgres. Nigerian voices and phone notifications need the pod to reach the internet (YarnGPT, and Google's push service); ask the organisers if outbound traffic is allowed.
+
+The POS app talks to whichever backend is in its Settings: set the Backend URL to `https://teamXX.xtradot.co` and tap **Test connection**.
 
 ## Demo day checklist
 
