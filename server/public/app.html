@@ -55,6 +55,16 @@
   </div>
 </header>
 
+<!-- ============ DEMO PHONE: one tap, then Tapnod talks ============ -->
+<button class="screen" id="s-demo" style="border:0;background:var(--ink);color:#fff;font:inherit;text-align:left;padding:32px 24px;border-radius:20px;margin:16px 0;cursor:pointer;justify-content:space-between">
+  <span class="eyebrow" style="color:#8fe0a8">Tapnod · Amaka's phone</span>
+  <span>
+    <span class="h1" style="display:block">Tap anywhere to start</span>
+    <span class="lead" style="display:block;color:#cfcfc8;margin-top:16px" id="demo-sub">Tapnod will read every payment aloud. You approve with your fingerprint.</span>
+  </span>
+  <span class="small" style="color:#a7a7a0" id="demo-note">One tap turns on the voice. The first time, it also saves your fingerprint.</span>
+</button>
+
 <!-- ============ SIGNED OUT ============ -->
 
 <section class="screen" id="s-welcome">
@@ -821,6 +831,8 @@ function showResult(req) {
   show('s-result');
   if (navigator.vibrate) navigator.vibrate(good ? [80] : [300]);
   say(words.spoken);
+  const shownId = req.request_id;
+  setTimeout(() => { if ($('s-result').classList.contains('on') && current && current.request_id === shownId) { current = null; show('s-home'); } }, 9000);
 }
 $('done').onclick = () => { current = null; show('s-home'); };
 
@@ -830,12 +842,44 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+/* ---------------- demo phone ---------------- */
+const IS_DEMO = location.pathname === '/demo';
+async function startDemoSession() {
+  const r = await (await fetch('/api/demo/session', { method: 'POST' })).json();
+  if (!r.token) throw new Error(r.message || 'Demo mode is off.');
+  token = r.token; localStorage.setItem('tapnod_token', token);
+  const info = await api('/api/me');
+  me = info.customer; hasFinger = info.has_fingerprint;
+  applyLanguage(); renderStatus();
+  if (!hasFinger) prefetchRegister();
+  show('s-demo');
+}
+$('s-demo').onclick = async () => {
+  unlockSound(); keepAwake();
+  if (!hasFinger && canPasskey()) {
+    $('demo-note').textContent = 'Touch the fingerprint sensor to save it…';
+    try { await addFingerprint(); }
+    catch (e) {
+      $('demo-note').textContent = e.message + ' (You can still approve with PIN 1234.)';
+      if (/Ready/.test(e.message)) return; // it just needed one more tap
+    }
+  }
+  renderStatus(); subscribePush();
+  show('s-home');
+  phoneSay('Hello ' + me.name.split(' ')[0] + '. Tapnod is on. When a shop charges your card, I will read the amount to you. '
+    + (hasFinger ? 'Touch the fingerprint sensor to approve.' : 'Tap approve, then enter your PIN.'));
+};
+
 /* ---------------- start ---------------- */
 async function boot() {
   try { config = await (await fetch('/api/config')).json(); } catch {}
   if (config.nigerian_voices) { try { ngVoices = (await (await fetch('/api/voices')).json()).voices || []; } catch {} }
   await registerWorker();
   applyLanguage();
+  if (IS_DEMO) {
+    try { await startDemoSession(); poll(); return; }
+    catch (e) { $('welcome-err').textContent = e.message; }
+  }
   if (token) {
     try {
       const info = await api('/api/me');
