@@ -175,10 +175,11 @@
   </div>
   <div class="spacer"></div>
   <form class="form hidden" id="pw-approve" novalidate>
-    <div class="field"><label for="ap-pass">No fingerprint on this phone. Enter your password to approve.</label>
+    <div class="field"><label for="ap-pass">Enter your Tapnod password to approve.</label>
       <input class="input" id="ap-pass" type="password" autocomplete="current-password"></div>
   </form>
   <p class="error" id="approve-err" role="alert"></p>
+  <button class="btn btn-link hidden" id="use-password" type="button">Use password instead</button>
   <button class="btn hidden" id="listen" data-t="tapToListen">Tap to listen</button>
   <button class="btn btn-primary" id="approve" data-t="approve">Approve with fingerprint</button>
   <div class="grid grid-2">
@@ -405,8 +406,18 @@ $('soundbar').onclick = () => { unlockSound(); hideSoundHelp(); if (current && c
 
 /* ---------------- fingerprint (passkeys, checked by the server) ---------------- */
 function inAppBrowser() { return /FBAN|FBAV|Instagram|WhatsApp|Line\/|; wv\)|Snapchat|TikTok/i.test(navigator.userAgent); }
-function fingerError(e) {
+function fingerError(e, where) {
   if (inAppBrowser()) return 'You opened this inside another app. Tap ⋮ and choose "Open in Chrome".';
+  const detail = e && e.name ? ' (' + e.name + (e.message ? ': ' + String(e.message).slice(0, 80) : '') + ')' : '';
+  if (e && e.name === 'NotAllowedError' && where === 'signin') {
+    return 'No Tapnod passkey on this phone, or it was cancelled. Sign in with your account number, then add your ' + BIO + ' in Settings.' + detail;
+  }
+  if (e && e.name === 'NotAllowedError' && where === 'add') {
+    return 'Your phone refused or cancelled it. Tap the button again: Tapnod will try a simpler passkey that more phones accept. Make sure a screen lock is set.' + detail;
+  }
+  if (e && e.name === 'NotAllowedError' && where === 'approve') {
+    return 'Cancelled or not allowed. Tap Approve again, or use your password below.' + detail;
+  }
   const why = {
     NotAllowedError: 'Cancelled or timed out. Tap the button and confirm with your ' + BIO + '.',
     NotSupportedError: IS_IOS ? 'Turn on Face ID (or Touch ID) and iCloud Keychain in iPhone Settings, then try again.'
@@ -414,7 +425,7 @@ function fingerError(e) {
     SecurityError: 'Open the https:// link. Fingerprint only works on https.',
     InvalidStateError: 'This fingerprint is already added to your Tapnod account.',
   }[e && e.name];
-  return why || (e && e.message) || 'Something went wrong.';
+  return (why || (e && e.message) || 'Something went wrong.') + detail;
 }
 const canPasskey = () => Boolean(window.PublicKeyCredential && navigator.credentials && window.isSecureContext);
 // iPhone Safari only opens Face ID after a tap, so on iPhone the payment screen waits for "Approve with Face ID".
@@ -422,6 +433,7 @@ const AUTO_PROMPT = !IS_IOS;
 
 // Options are fetched ahead of time, so a tap goes straight to the phone's prompt.
 let regOptions = null, loginOptions = null;
+let simplePasskey = false; // after a refusal, ask for a passkey any phone can make
 async function prefetchRegister() { try { regOptions = await api('/api/me/passkey/options', { method: 'POST' }); regOptions.at = Date.now(); } catch { regOptions = null; } }
 async function prefetchLogin() { try { loginOptions = await api('/api/auth/passkey/login/options', { method: 'POST' }); loginOptions.at = Date.now(); } catch { loginOptions = null; } }
 const fresh = (o) => o && Date.now() - o.at < 240000;
@@ -436,11 +448,17 @@ async function addFingerprint() {
       challenge: b64.dec(o.challenge), rp: { name: 'Tapnod', id: o.rp_id },
       user: { id: b64.dec(o.user.id), name: o.user.name, displayName: o.user.display_name },
       pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
-      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'required' },
+      authenticatorSelection: simplePasskey
+        ? { userVerification: 'required', residentKey: 'preferred' }
+        : { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'required' },
       excludeCredentials: (o.exclude || []).map((id) => ({ type: 'public-key', id: b64.dec(id) })),
       timeout: 120000,
     }});
-  } catch (e) { throw new Error(fingerError(e)); }
+  } catch (e) {
+    if (e && (e.name === 'NotAllowedError' || e.name === 'NotSupportedError')) simplePasskey = true;
+    prefetchRegister();
+    throw new Error(fingerError(e, 'add'));
+  }
   const r = cred.response;
   if (!r.getPublicKey || !r.getPublicKey()) throw new Error('This browser is too old for Tapnod fingerprints. Update Chrome.');
   await api('/api/me/passkey', { body: {
@@ -464,7 +482,7 @@ $('finger-signin').onclick = async () => {
     let cred;
     try {
       cred = await navigator.credentials.get({ publicKey: { challenge: b64.dec(o.challenge), rpId: o.rp_id, userVerification: 'required', timeout: 120000 } });
-    } catch (e) { throw new Error(fingerError(e)); }
+    } catch (e) { throw new Error(fingerError(e, 'signin')); }
     const r = await api('/api/auth/passkey/login', { body: { challenge_id: o.challenge_id, ...assertionBody(cred) } });
     await signedIn(r);
   } catch (e) { $('welcome-err').textContent = e.message; prefetchLogin(); }
@@ -628,6 +646,8 @@ function showPending(req) {
   $('p-card').textContent = req.card_last4 ? (req.card_scheme || 'Card') + ' ···· ' + req.card_last4 : 'Charged to your Tapnod account';
   $('approve-err').textContent = '';
   $('pw-approve').classList.toggle('hidden', hasFinger);
+  $('use-password').classList.toggle('hidden', !hasFinger);
+  usePassword = !hasFinger;
   $('approve').textContent = hasFinger ? I.t(L(), 'approve') : 'Approve with password';
   renameBiometric($('s-pending'));
   $('listen').classList.add('hidden');
@@ -683,7 +703,11 @@ async function approveWithFinger(auto) {
         challenge: b64.dec(o.challenge), rpId: o.rp_id, userVerification: 'required', timeout: 120000,
         allowCredentials: o.allow.map((c) => ({ type: 'public-key', id: b64.dec(c) })),
       }});
-    } catch (e) { if (!auto) throw new Error(fingerError(e)); return; }
+    } catch (e) {
+      if (!auto) throw new Error(fingerError(e, 'approve'));
+      $('use-password').classList.remove('hidden');
+      return;
+    }
     const r = await api('/api/customer/requests/' + id + '/approve', { body: { challenge_id: o.challenge_id, ...assertionBody(cred) } });
     showResult(r.request);
   } catch (e) {
@@ -697,8 +721,16 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') { if (me) keepAwake(); setTimeout(() => approveWithFinger(true), 400); }
 });
 
+let usePassword = false;
+$('use-password').onclick = () => {
+  usePassword = true;
+  $('pw-approve').classList.remove('hidden');
+  $('use-password').classList.add('hidden');
+  $('approve').textContent = 'Approve with password';
+  $('ap-pass').focus();
+};
 $('approve').onclick = async () => {
-  if (hasFinger) return approveWithFinger(false);
+  if (hasFinger && !usePassword) return approveWithFinger(false);
   try {
     const r = await api('/api/customer/requests/' + current.request_id + '/approve', { body: { password: $('ap-pass').value } });
     $('ap-pass').value = '';
