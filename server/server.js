@@ -320,9 +320,8 @@ async function route(req, res) {
         return send(res, 409, { message: 'This payment is already ' + r.status + '.', request: forCustomer(r, c) });
       }
       const b = match[2] === 'approve' ? await readJson(req) : null;
-      // Phones without a fingerprint: approve with the account password instead.
+      // Password approval: for phones without a biometric, or when it misbehaves.
       if (b && b.password !== undefined) {
-        if ((await db.credentialsFor(c.id)).length) return send(res, 400, { message: 'Use your fingerprint to approve.' });
         if (!auth.checkPassword(String(b.password), c.password_hash)) return send(res, 401, { message: 'Wrong password.' });
       } else if (b) {
         const ch = auth.takeChallenge(b?.challenge_id, 'approve');

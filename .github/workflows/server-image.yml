@@ -1,0 +1,33 @@
+# Builds the Tapnod server image (linux/amd64) and publishes it to GitHub Container Registry,
+# so the Forge sandbox can pull it: ghcr.io/tech-sis123/tapnod:latest
+name: Build server image
+
+on:
+  push:
+    branches: [main, forge-deploy]
+    paths: ['server/**', 'Dockerfile', '.dockerignore', '.github/workflows/server-image.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/tech-sis123/tapnod:latest
+            ghcr.io/tech-sis123/tapnod:${{ github.sha }}
