@@ -43,7 +43,7 @@
   const LANGS = {
     en: {
       name: 'English',
-      ask: '{m} is asking you to pay {a}. To approve, tap the big button and use your {bio}. Or decline.',
+      ask: '{m} is asking you to pay {a}. Approve with your {bio}, or decline.',
       notifTitle: '{m} is asking you to pay {a}',
       notifBody: 'Tapnod. Tap to approve with your fingerprint, or decline.',
       approved: 'Payment approved. You paid {a} to {m}.',
