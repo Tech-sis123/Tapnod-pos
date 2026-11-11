@@ -234,6 +234,22 @@
 <script>
 const I = window.TapnodI18n;
 const $ = (id) => document.getElementById(id);
+
+/* ---------------- which biometric this phone uses ----------------
+   Passkeys use whatever the phone has: Face ID or Touch ID on Apple devices, fingerprint or face unlock on
+   Android, Windows Hello on PCs. We only change the words so they match what the person will see. */
+const UA = navigator.userAgent;
+const IS_IOS = /iPhone|iPad|iPod/.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const BIO = IS_IOS ? 'Face ID' : /Macintosh/.test(UA) ? 'Touch ID' : /Windows/.test(UA) ? 'Windows Hello' : 'fingerprint';
+I.setBio(BIO);
+function renameBiometric(root) {
+  if (BIO === 'fingerprint') return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const swap = (s) => s.replace(/your fingerprint/g, 'your ' + BIO).replace(/a fingerprint/g, BIO)
+    .replace(/fingerprint/g, BIO).replace(/Fingerprint/g, BIO).replace(/your finger\b/g, BIO);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) n.nodeValue = swap(n.nodeValue);
+}
+renameBiometric(document.body);
 const LOCAL = 'tapnod_local';
 
 /* ---------------- state ---------------- */
@@ -392,14 +408,17 @@ function inAppBrowser() { return /FBAN|FBAV|Instagram|WhatsApp|Line\/|; wv\)|Sna
 function fingerError(e) {
   if (inAppBrowser()) return 'You opened this inside another app. Tap ⋮ and choose "Open in Chrome".';
   const why = {
-    NotAllowedError: 'Cancelled or timed out. Try again and confirm with your fingerprint.',
-    NotSupportedError: 'This phone can\'t save a passkey yet. Set a screen lock and fingerprint in phone Settings.',
+    NotAllowedError: 'Cancelled or timed out. Tap the button and confirm with your ' + BIO + '.',
+    NotSupportedError: IS_IOS ? 'Turn on Face ID (or Touch ID) and iCloud Keychain in iPhone Settings, then try again.'
+      : 'This phone can\'t save a passkey yet. Set a screen lock and fingerprint in phone Settings.',
     SecurityError: 'Open the https:// link. Fingerprint only works on https.',
     InvalidStateError: 'This fingerprint is already added to your Tapnod account.',
   }[e && e.name];
   return why || (e && e.message) || 'Something went wrong.';
 }
 const canPasskey = () => Boolean(window.PublicKeyCredential && navigator.credentials && window.isSecureContext);
+// iPhone Safari only opens Face ID after a tap, so on iPhone the payment screen waits for "Approve with Face ID".
+const AUTO_PROMPT = !IS_IOS;
 
 // Options are fetched ahead of time, so a tap goes straight to the phone's prompt.
 let regOptions = null, loginOptions = null;
@@ -466,7 +485,11 @@ async function subscribePush() {
 }
 async function enableNotifications() {
   if (inAppBrowser()) return 'You opened this inside another app. Open the link in Chrome for notifications.';
-  if (!('Notification' in window) || !swReg) return 'This browser can\'t show notifications. Use Chrome on Android.';
+  if (!('Notification' in window) || !swReg) {
+    return IS_IOS
+      ? 'On iPhone, notifications need Tapnod on your Home Screen: tap Share, then "Add to Home Screen", open Tapnod from there and turn them on.'
+      : 'This browser can\'t show notifications. Use Chrome on Android.';
+  }
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') return 'Notifications are blocked. In Chrome, tap the lock icon by the address, then Permissions, and allow Notifications.';
   if (!(await subscribePush())) return 'Allowed, but the phone could not register. Check your internet and try again.';
@@ -482,6 +505,7 @@ function renderStatus() {
   $('st-finger').textContent = hasFinger ? 'Added' : 'Not added';
   $('st-finger').className = 'pill' + (hasFinger ? '' : ' off');
   $('set-finger-s').textContent = hasFinger ? 'Added to this account' : 'Not added yet';
+  renameBiometric($('s-settings'));
   $('set-notify-s').textContent = on ? 'On for this phone' : n === 'denied' ? 'Blocked in Chrome' : 'Off';
   if (me) {
     for (const id of ['home-id']) $(id).textContent = me.tapnod_id;
@@ -605,6 +629,7 @@ function showPending(req) {
   $('approve-err').textContent = '';
   $('pw-approve').classList.toggle('hidden', hasFinger);
   $('approve').textContent = hasFinger ? I.t(L(), 'approve') : 'Approve with password';
+  renameBiometric($('s-pending'));
   $('listen').classList.add('hidden');
   if ($('s-settings').classList.contains('on')) lastScreen = 's-pending'; else show('s-pending');
   if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
@@ -643,7 +668,7 @@ async function fetchApproveOptions() {
 async function approveWithFinger(auto) {
   if (!current || current.status !== 'pending' || fingerBusy || !hasFinger) return;
   if (auto) {
-    if (autoTried.has(current.request_id) || document.visibilityState !== 'visible') return;
+    if (!AUTO_PROMPT || autoTried.has(current.request_id) || document.visibilityState !== 'visible') return;
     autoTried.add(current.request_id);
   }
   fingerBusy = true; $('approve').disabled = true; $('approve-err').textContent = '';
