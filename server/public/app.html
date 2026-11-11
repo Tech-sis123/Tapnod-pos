@@ -873,10 +873,10 @@ $('s-demo').onclick = async () => {
       if (/Ready/.test(e.message)) return; // it just needed one more tap
     }
   }
-  // Same tap: ask for notifications too, if the browser still allows it after the fingerprint.
-  if ('Notification' in window && Notification.permission === 'default') { try { await enableNotifications(); } catch {} }
   renderStatus(); subscribePush();
   show('s-home');
+  // Same tap: ask for notifications too (without waiting on the answer, so the screen never gets stuck).
+  if ('Notification' in window && Notification.permission === 'default') enableNotifications().then(() => renderStatus()).catch(() => {});
   phoneSay('Hello ' + me.name.split(' ')[0] + '. Tapnod is on. When a shop charges your card, I will read the amount to you. '
     + (hasFinger ? 'Touch the fingerprint sensor to approve.' : 'Tap approve, then enter your PIN.'));
 };
