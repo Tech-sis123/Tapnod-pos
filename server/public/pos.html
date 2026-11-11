@@ -65,12 +65,30 @@
         <div class="h1" style="margin-top:12px">Tap the customer's card</div>
         <p class="body" style="margin-top:10px">Charging <b id="card-amount">₦0</b>. Tap the card on the reader, or pick the customer.</p>
       </div>
-      <div class="big-actions">
-        <button class="btn btn-primary" id="tapped">Card tapped<small>Customer's Tapnod card</small></button>
+      <div class="big-actions" style="grid-template-columns:1fr 1fr 1fr">
+        <button class="btn btn-primary" id="scan">Scan card<small>Hold it up to the webcam</small></button>
+        <button class="btn" id="tapped">Card tapped<small>Customer's Tapnod card</small></button>
         <button class="btn" id="pick">Choose customer<small>Find by name or Tapnod ID</small></button>
       </div>
       <p class="small">A USB card reader works too: it types the card ID and presses Enter.</p>
       <button class="btn btn-link" id="cancel-card">Cancel</button>
+    </section>
+
+    <!-- 2a. Webcam scan -->
+    <section class="screen" id="s-scan">
+      <div class="card display" style="padding:20px">
+        <div class="eyebrow">Step 2 of 3 · Scan card</div>
+        <div style="position:relative;margin-top:14px;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:16/9">
+          <video id="cam" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;transform:scaleX(-1)"></video>
+          <div id="frame" style="position:absolute;left:22%;right:22%;top:18%;bottom:18%;border:3px solid #fff;border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.35);transition:border-color .2s"></div>
+          <div id="scan-msg" style="position:absolute;left:0;right:0;bottom:14px;text-align:center;color:#fff;font-weight:600;font-size:18px">Hold the card inside the frame</div>
+        </div>
+        <div class="bar" style="margin-top:14px"><i id="scan-bar" style="width:0%;background:var(--accent);transition:width .15s linear"></i></div>
+      </div>
+      <div class="grid grid-2">
+        <button class="btn" id="use-card">Use this card</button>
+        <button class="btn btn-link" id="cancel-scan">Cancel</button>
+      </div>
     </section>
 
     <!-- 2b. Pick customer -->
@@ -202,6 +220,75 @@ function renderCustomers() {
 $('search').oninput = renderCustomers;
 $('cancel-card').onclick = $('cancel-pick').onclick = () => show('s-amount');
 
+/* ---------- webcam card scan (demo) ----------
+   Watches the frame and counts a card as "scanned" when something is held still inside it for about
+   a second and a half. It does not read the card number: the card goes to the demo customer, like "Card tapped". */
+let camStream = null, scanLoop = null;
+async function startScan() {
+  show('s-scan');
+  $('scan-msg').textContent = 'Starting the camera…';
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360, facingMode: 'user' }, audio: false });
+  } catch (e) {
+    $('scan-msg').textContent = 'Camera blocked. Allow the camera in the address bar, or use Card tapped.';
+    return;
+  }
+  const video = $('cam');
+  video.srcObject = camStream;
+  await video.play().catch(() => {});
+  const c = document.createElement('canvas'); c.width = 64; c.height = 36;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  let base = null, steady = 0, prev = null;
+  const t0 = Date.now();
+  $('scan-msg').textContent = 'Hold the card inside the frame';
+  scanLoop = setInterval(() => {
+    if (!video.videoWidth) return;
+    ctx.drawImage(video, video.videoWidth * .22, video.videoHeight * .18, video.videoWidth * .56, video.videoHeight * .64, 0, 0, 64, 36);
+    const px = ctx.getImageData(0, 0, 64, 36).data.slice();
+    if (!base && Date.now() - t0 > 700) base = px;                     // the empty scene
+    if (!base) return;
+    // Compare colour, not just brightness: a dark card on a dark desk still differs in colour.
+    const diff = (a, b, i) => Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2]));
+    let changed = 0, moving = 0;
+    const n = 64 * 36;
+    for (let i = 0; i < n * 4; i += 4) {
+      if (diff(px, base, i) > 30) changed++;
+      if (prev && diff(px, prev, i) > 22) moving++;
+    }
+    prev = px;
+    const inFrame = changed / n > 0.2;                                // something new fills the frame
+    const still = moving / n < 0.12;                                  // and it's being held still
+    steady = inFrame && still ? steady + 1 : Math.max(0, steady - 2);
+    $('scan-bar').style.width = Math.min(100, steady / 12 * 100) + '%';
+    $('frame').style.borderColor = inFrame ? '#8fe0a8' : '#fff';
+    $('scan-msg').textContent = inFrame ? (still ? 'Card found. Hold still…' : 'Hold it still…') : 'Hold the card inside the frame';
+    if (steady >= 12) {                                               // ~1.5 s steady
+      const snap = document.createElement('canvas'); snap.width = 320; snap.height = 200;
+      snap.getContext('2d').drawImage(video, video.videoWidth * .22, video.videoHeight * .18, video.videoWidth * .56, video.videoHeight * .64, 0, 0, 320, 200);
+      lastScan = snap.toDataURL('image/jpeg', .7);
+      stopScan();
+      charge({ card_token: 'tapnod-demo-card', card_last4: '4821', card_scheme: 'CARD' });
+    }
+  }, 120);
+}
+function stopScan() {
+  clearInterval(scanLoop); scanLoop = null;
+  if (camStream) { camStream.getTracks().forEach((t) => t.stop()); camStream = null; }
+}
+let lastScan = null;
+$('scan').onclick = startScan;
+$('use-card').onclick = () => {
+  const video = $('cam');
+  if (video.videoWidth) {
+    const snap = document.createElement('canvas'); snap.width = 320; snap.height = 200;
+    snap.getContext('2d').drawImage(video, video.videoWidth * .22, video.videoHeight * .18, video.videoWidth * .56, video.videoHeight * .64, 0, 0, 320, 200);
+    lastScan = snap.toDataURL('image/jpeg', .7);
+  }
+  stopScan();
+  charge({ card_token: 'tapnod-demo-card', card_last4: '4821', card_scheme: 'CARD' });
+};
+$('cancel-scan').onclick = () => { stopScan(); show('s-card'); };
+
 async function charge(extra) {
   show('s-wait');
   $('wait-amount').textContent = fmt(naira());
@@ -246,6 +333,7 @@ function finish(status, message) {
   if (sale && status !== 'failed') {
     $('last-card').hidden = false;
     $('receipt').innerHTML = '';
+    if (lastScan) { const tr = document.createElement('tr'); tr.innerHTML = '<td colspan="2"><img alt="Scanned card" style="width:100%;border-radius:10px;margin-bottom:6px"></td>'; tr.querySelector('img').src = lastScan; $('receipt').appendChild(tr); lastScan = null; }
     for (const [k, v] of [['Status', titles[status]], ['Amount', fmt(sale.amount)], ['Customer', sale.name], ['Paid with', sale.card], ['Reference', sale.reference || '—'], ['Merchant', settings.merchant], ['Time', new Date().toLocaleTimeString()]]) {
       const tr = document.createElement('tr'); tr.innerHTML = '<td></td><td></td>'; tr.children[0].textContent = k; tr.children[1].textContent = v; $('receipt').appendChild(tr);
     }
