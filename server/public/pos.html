@@ -123,7 +123,6 @@
     <div class="card">
       <div class="eyebrow">Settings</div>
       <div class="field" style="margin-top:12px"><label for="merchant">Merchant name</label><input class="input" id="merchant"></div>
-      <label style="display:flex;gap:10px;align-items:center;margin-top:12px;font-size:15px"><input type="checkbox" id="voice" checked> Speak results</label>
     </div>
   </aside>
 </div>
@@ -135,9 +134,8 @@ const store = JSON.parse(localStorage.getItem('tapnod_pos') || '{}');
 const settings = Object.assign({ merchant: 'Bisi Ventures', voice: true, terminal: 'TPN-WEB-' + Math.random().toString(36).slice(2, 6).toUpperCase() }, store);
 const save = () => localStorage.setItem('tapnod_pos', JSON.stringify(settings));
 save();
-$('merchant').value = settings.merchant; $('voice').checked = settings.voice; $('merchant-label').textContent = settings.merchant;
+$('merchant').value = settings.merchant; $('merchant-label').textContent = settings.merchant;
 $('merchant').oninput = (e) => { settings.merchant = e.target.value || 'Merchant'; $('merchant-label').textContent = settings.merchant; save(); };
-$('voice').onchange = (e) => { settings.voice = e.target.checked; save(); };
 
 let digits = '', sale = null, poll = null, timer = null, customers = [];
 const naira = () => Number(digits || '0');
@@ -147,8 +145,9 @@ function show(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.id === id));
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
 }
+// The POS stays silent: the customer's own phone does the talking.
 function say(t) {
-  if (!settings.voice || !('speechSynthesis' in window)) return;
+  return;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(t);
   const v = speechSynthesis.getVoices().find((x) => x.lang === 'en-NG') || speechSynthesis.getVoices().find((x) => x.lang.startsWith('en'));

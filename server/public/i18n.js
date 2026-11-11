@@ -44,8 +44,8 @@
     en: {
       name: 'English',
       ask: '{m} is asking you to pay {a}. Approve with your {bio}, or decline.',
-      notifTitle: 'Pay {a} to {m}?',
-      notifBody: 'Tap to approve with your {bio}.',
+      notifTitle: '{m} is asking you to pay {a}',
+      notifBody: 'Tapnod. Tap to approve with your fingerprint, or decline.',
       approved: 'Payment approved. You paid {a} to {m}.',
       declined: 'Payment declined. No money left your account.',
       expired: 'The payment timed out. No money left your account.',
