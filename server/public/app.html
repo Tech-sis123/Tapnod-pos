@@ -412,6 +412,9 @@ function fingerError(e, where) {
   if (e && e.name === 'NotAllowedError' && where === 'signin') {
     return 'No Tapnod passkey on this phone, or it was cancelled. Sign in with your account number, then add your ' + BIO + ' in Settings.' + detail;
   }
+  if (e && e.name === 'NotAllowedError' && where === 'add' && IS_IOS) {
+    return 'Face ID didn\'t open. Tap "Add Face ID" again. If it still fails: open this page in Safari itself (not inside another app), and turn on iPhone Settings, then your name, then iCloud, then Passwords and Keychain.' + detail;
+  }
   if (e && e.name === 'NotAllowedError' && where === 'add') {
     return 'Your phone refused or cancelled it. Tap the button again: Tapnod will try a simpler passkey that more phones accept. Make sure a screen lock is set.' + detail;
   }
@@ -436,11 +439,16 @@ let regOptions = null, loginOptions = null;
 let simplePasskey = false; // after a refusal, ask for a passkey any phone can make
 async function prefetchRegister() { try { regOptions = await api('/api/me/passkey/options', { method: 'POST' }); regOptions.at = Date.now(); } catch { regOptions = null; } }
 async function prefetchLogin() { try { loginOptions = await api('/api/auth/passkey/login/options', { method: 'POST' }); loginOptions.at = Date.now(); } catch { loginOptions = null; } }
-const fresh = (o) => o && Date.now() - o.at < 240000;
+const fresh = (o) => Boolean(o && Date.now() - o.at < 240000);
 
 async function addFingerprint() {
   if (!canPasskey()) throw new Error(inAppBrowser() ? fingerError() : 'This browser can\'t use your fingerprint. Open the link in Chrome.');
-  const o = fresh(regOptions) ? regOptions : await api('/api/me/passkey/options', { method: 'POST' });
+  if (!fresh(regOptions)) {
+    // Safari only opens Face ID straight from a tap. Load what we need now, then ask for one more tap.
+    await prefetchRegister();
+    throw new Error('Ready. Tap "' + $('do-finger').textContent.trim() + '" once more.');
+  }
+  const o = regOptions;
   regOptions = null;
   let cred;
   try {
@@ -477,7 +485,8 @@ $('finger-signin').onclick = async () => {
   $('welcome-err').textContent = '';
   if (!canPasskey()) { $('welcome-err').textContent = fingerError(); return; }
   try {
-    const o = fresh(loginOptions) ? loginOptions : await api('/api/auth/passkey/login/options', { method: 'POST' });
+    if (!fresh(loginOptions)) { await prefetchLogin(); throw new Error('Ready. Tap "Sign in with ' + BIO + '" once more.'); }
+    const o = loginOptions;
     loginOptions = null;
     let cred;
     try {
@@ -694,9 +703,13 @@ async function approveWithFinger(auto) {
   fingerBusy = true; $('approve').disabled = true; $('approve-err').textContent = '';
   const id = current.request_id;
   try {
-    let o = approveOptions && approveOptions.request_id === id && fresh(approveOptions) ? approveOptions : await fetchApproveOptions();
+    let o = approveOptions && approveOptions.request_id === id && fresh(approveOptions) ? approveOptions : null;
+    if (!o) {
+      if (auto) return;
+      await fetchApproveOptions();
+      throw new Error('Ready. Tap Approve once more.');
+    }
     approveOptions = null;
-    if (!o) throw new Error('Could not start the approval. Check your internet.');
     let cred;
     try {
       cred = await navigator.credentials.get({ publicKey: {
@@ -792,6 +805,12 @@ boot();
 setInterval(poll, 1000);
 setInterval(updateCountdown, 1000);
 setInterval(subscribePush, 300000);
+// Keep Face ID / fingerprint challenges fresh, so a tap always goes straight to the phone's prompt.
+setInterval(() => {
+  const on = (id) => $(id).classList.contains('on');
+  if (me && (on('s-finger') || on('s-settings')) && !fresh(regOptions)) prefetchRegister();
+  if (!me && on('s-welcome') && !fresh(loginOptions)) prefetchLogin();
+}, 20000);
 </script>
 </body>
 </html>
