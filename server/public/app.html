@@ -203,7 +203,7 @@
   <p class="error" id="approve-err" role="alert"></p>
   <button class="btn btn-link hidden" id="use-password" type="button">Use password instead</button>
   <button class="btn hidden" id="listen" data-t="tapToListen">Tap to listen</button>
-  <button class="btn btn-primary" id="approve" data-t="approve">Approve with fingerprint</button>
+  <button class="btn btn-primary" id="approve" data-t="approve" style="min-height:140px;font-size:22px">Approve with fingerprint</button>
   <div class="grid grid-2">
     <button class="btn" id="repeat" data-t="repeat">Repeat</button>
     <button class="btn" id="decline" data-t="decline">Decline</button>
@@ -454,7 +454,7 @@ function fingerError(e, where) {
 }
 const canPasskey = () => Boolean(window.PublicKeyCredential && navigator.credentials && window.isSecureContext);
 // iPhone Safari only opens Face ID after a tap, so on iPhone the payment screen waits for "Approve with Face ID".
-const AUTO_PROMPT = !IS_IOS;
+const AUTO_PROMPT = false; // phones only open the fingerprint prompt straight after a tap
 
 // Options are fetched ahead of time, so a tap goes straight to the phone's prompt.
 let regOptions = null, loginOptions = null;
@@ -757,8 +757,12 @@ async function approveWithFinger(auto) {
         allowCredentials: o.allow.map((c) => ({ type: 'public-key', id: b64.dec(c) })),
       }});
     } catch (e) {
-      if (!auto) throw new Error(fingerError(e, 'approve'));
-      $('use-password').classList.remove('hidden');
+      if (auto) { $('use-password').classList.remove('hidden'); return; }
+      // Fingerprint didn't work (cancelled, timed out, not allowed): straight to the PIN keypad.
+      fingerBusy = false; $('approve').disabled = false;
+      $('approve-err').textContent = 'Fingerprint didn\'t work. Enter your PIN instead.';
+      openPinPad();
+      phoneSay('Fingerprint did not work. Enter your four digit PIN.');
       return;
     }
     const r = await api('/api/customer/requests/' + id + '/approve', { body: { challenge_id: o.challenge_id, ...assertionBody(cred) } });
