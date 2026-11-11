@@ -16,7 +16,7 @@ spec:
     metadata:
       labels: { app: app }
     spec:
-      # Only needed if the GHCR package is private (see README, "Deploy to the Forge sandbox"):
+      # Only needed if the GHCR package is private:
       # imagePullSecrets: [{ name: regcred }]
       containers:
       - name: app
@@ -27,7 +27,7 @@ spec:
         env:
         - { name: PORT, value: "8080" }
         - { name: TOKEN_SECRET, value: "tapnod-demo-secret" }
-        - { name: DEMO_AUTO_LINK, value: "latest" }
+        - { name: DEMO_AUTO_LINK, value: "demo" }
         # Data is kept in memory in the sandbox (one replica). Add DATABASE_URL to use Postgres.
         envFrom:
         - secretRef: { name: huawei-gateway, optional: true }

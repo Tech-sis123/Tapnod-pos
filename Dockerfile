@@ -1,4 +1,4 @@
-# Tapnod backend + landing page + customer web app, for the Forge 2026 sandbox (linux/amd64).
+# Tapnod backend, landing page, customer web app and laptop POS (linux/amd64).
 FROM node:20-alpine
 WORKDIR /app
 COPY server/package.json server/package-lock.json ./

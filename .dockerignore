@@ -1,7 +1,5 @@
 .git
-app
-gradle
-build
+.github
 **/node_modules
 *.md
 k8s

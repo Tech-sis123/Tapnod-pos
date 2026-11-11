@@ -4,7 +4,7 @@ name: Build server image
 
 on:
   push:
-    branches: [main, forge-deploy]
+    branches: [main]
     paths: ['server/**', 'Dockerfile', '.dockerignore', '.github/workflows/server-image.yml']
   workflow_dispatch:
 
