@@ -20,7 +20,10 @@ const APP_SECRET = process.env.VAPID_SECRET || TOKEN_SECRET;
 //   "latest" (default) = link the card to the most recently signed-up customer
 //   a customer id      = link it to that customer
 //   empty              = real behaviour, the POS shows "Card not linked"
-const DEMO_AUTO_LINK = process.env.DEMO_AUTO_LINK ?? 'latest';
+const DEMO_AUTO_LINK = process.env.DEMO_AUTO_LINK ?? 'demo';
+// Demo customer, created on start so the demo phone needs no sign-up. Set DEMO_CUSTOMER=off to disable.
+const DEMO_ON = (process.env.DEMO_CUSTOMER || 'on') !== 'off';
+const DEMO = { id: 'cus_demo_amaka', tapnod_id: 'TN-0001-AO', name: 'Amaka Okafor', account_number: '0123456789', pin: '1234' };
 const REQUEST_TTL_MS = 120_000;
 const LANGS = Object.keys(i18n.LANGS);
 
@@ -53,6 +56,8 @@ function siteOf(req) {
 const STATIC = {
   '/': ['landing.html', 'text/html; charset=utf-8'],
   '/app': ['app.html', 'text/html; charset=utf-8'],
+  '/demo': ['app.html', 'text/html; charset=utf-8'],
+  '/pos': ['pos.html', 'text/html; charset=utf-8'],
   '/tapnod.css': ['tapnod.css', 'text/css; charset=utf-8'],
   '/i18n.js': ['i18n.js', 'application/javascript; charset=utf-8'],
   '/sw.js': ['sw.js', 'application/javascript; charset=utf-8'],
@@ -146,6 +151,14 @@ async function route(req, res) {
 
   if (m === 'GET' && (p === '/api/health' || p === '/healthz')) return send(res, 200, { ok: true, storage: db.kind });
 
+  // The demo phone: signs straight in as the demo customer (no sign-up on stage).
+  if (m === 'POST' && p === '/api/demo/session') {
+    if (!DEMO_ON) return send(res, 404, { message: 'Demo mode is off.' });
+    const c = await db.getCustomer(DEMO.id);
+    if (!c) return send(res, 404, { message: 'Demo customer missing.' });
+    return send(res, 200, { token: sessions.issue(c.id, 365), customer: publicCustomer(c) });
+  }
+
   if (m === 'GET' && p === '/api/config') {
     return send(res, 200, { push_public_key: vapid.publicKey, nigerian_voices: tts.enabled(), languages: LANGS });
   }
@@ -172,10 +185,11 @@ async function route(req, res) {
     const name = String(b?.name || '').trim().slice(0, 80);
     const account = String(b?.account_number || '').replace(/\s/g, '');
     const phone = String(b?.phone || '').replace(/[^\d+]/g, '').slice(0, 16);
-    const password = String(b?.password || '');
+    // A 4-digit app PIN, like Cowrywise and most Nigerian banking apps. (A longer password still works.)
+    const password = String(b?.pin ?? b?.password ?? '');
     if (name.length < 2) return send(res, 400, { message: 'Enter your full name.', field: 'name' });
     if (!/^\d{10}$/.test(account)) return send(res, 400, { message: 'Account number must be 10 digits.', field: 'account_number' });
-    if (password.length < 6) return send(res, 400, { message: 'Password must be at least 6 characters.', field: 'password' });
+    if (!/^\d{4}$/.test(password) && password.length < 6) return send(res, 400, { message: 'Your PIN must be 4 digits.', field: 'pin' });
     const lang = LANGS.includes(b?.lang) ? b.lang : 'en';
     let c = null;
     for (let i = 0; i < 5 && !c; i++) {
@@ -200,8 +214,8 @@ async function route(req, res) {
   if (m === 'POST' && p === '/api/auth/login') {
     const b = await readJson(req);
     const c = await db.getCustomerByAccount(String(b?.account_number || '').replace(/\s/g, ''));
-    if (!c || !auth.checkPassword(String(b?.password || ''), c.password_hash)) {
-      return send(res, 401, { message: 'Account number or password is wrong.' });
+    if (!c || !auth.checkPassword(String(b?.pin ?? b?.password ?? ''), c.password_hash)) {
+      return send(res, 401, { message: 'Account number or PIN is wrong.' });
     }
     return send(res, 200, { token: sessions.issue(c.id), customer: publicCustomer(c) });
   }
@@ -321,8 +335,8 @@ async function route(req, res) {
       }
       const b = match[2] === 'approve' ? await readJson(req) : null;
       // Password approval: for phones without a biometric, or when it misbehaves.
-      if (b && b.password !== undefined) {
-        if (!auth.checkPassword(String(b.password), c.password_hash)) return send(res, 401, { message: 'Wrong password.' });
+      if (b && (b.pin !== undefined || b.password !== undefined)) {
+        if (!auth.checkPassword(String(b.pin ?? b.password), c.password_hash)) return send(res, 401, { message: 'Wrong PIN. Try again.' });
       } else if (b) {
         const ch = auth.takeChallenge(b?.challenge_id, 'approve');
         if (!ch || ch.request_id !== r.request_id || ch.customer_id !== c.id) {
@@ -376,7 +390,8 @@ async function route(req, res) {
       const owner = await db.cardOwner(b.card_token);
       if (owner) customer = await db.getCustomer(owner);
       if (!customer && DEMO_AUTO_LINK) {
-        customer = DEMO_AUTO_LINK === 'latest' ? (await db.listCustomers())[0] : await db.getCustomer(DEMO_AUTO_LINK);
+        customer = DEMO_AUTO_LINK === 'latest' ? (await db.listCustomers())[0]
+          : await db.getCustomer(DEMO_AUTO_LINK === 'demo' ? DEMO.id : DEMO_AUTO_LINK);
         if (customer) await db.linkCard(b.card_token, customer.id);
       }
       if (!customer) return send(res, 404, { error: 'card_not_linked', message: 'Card not linked to Tapnod.' });
@@ -416,7 +431,21 @@ async function route(req, res) {
   send(res, 404, { message: 'Not found.' });
 }
 
-db.init().then(() => {
+async function seedDemo() {
+  if (!DEMO_ON || await db.getCustomer(DEMO.id)) return;
+  // Someone already signed up with the demo account number: use that account as the demo customer.
+  const existing = await db.getCustomerByAccount(DEMO.account_number);
+  if (existing) { DEMO.id = existing.id; console.log(`Demo customer: ${existing.name} (existing account)`); return; }
+  try {
+    await db.createCustomer({
+      id: DEMO.id, tapnod_id: DEMO.tapnod_id, name: DEMO.name, account_number: DEMO.account_number, phone: '',
+      password_hash: auth.hashPassword(DEMO.pin), lang: 'en', voice: '', created_at: 1,
+    });
+    console.log(`Demo customer ready: ${DEMO.name}, account ${DEMO.account_number}, PIN ${DEMO.pin}`);
+  } catch (e) { console.warn('Demo customer not created:', e.message); }
+}
+
+db.init().then(seedDemo).then(() => {
   http
     .createServer((req, res) => {
       route(req, res).catch((e) => {

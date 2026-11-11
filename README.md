@@ -36,6 +36,20 @@ This repo holds the whole demo:
 
 The card number never leaves the POS phone. It is turned into a one-way token (HMAC-SHA256) the moment it's read, and only the last 4 digits are shown.
 
+## Demo in 2 minutes (laptop + Android)
+
+1. **Laptop:** open `https://<your-link>/pos`.
+2. **Amaka's phone:** open `https://<your-link>/demo` in Chrome. It's already signed in as the demo customer (Amaka Okafor, account `0123456789`, PIN `1234`). Tap the screen once: the voice turns on, and the first time it saves her fingerprint.
+3. Charge on the laptop and press **Card tapped**. The phone reads the amount aloud and the fingerprint prompt opens by itself; touching the sensor approves. The result goes back to "waiting" by itself.
+
+The demo customer is created on start (turn off with `DEMO_CUSTOMER=off`), and any tapped card goes to her (`DEMO_AUTO_LINK=demo`).
+
+## Fastest demo (laptop + phone)
+
+1. **POS on the laptop:** open `https://<your-link>/pos` in any browser. Type the amount (keyboard works), press Charge, then **Card tapped** or **Choose customer**. A USB card reader that types the card ID also works.
+2. **Customer phone:** open `https://<your-link>/app`, tap **Create an account**: name, 10-digit account number, a **4-digit PIN**. Done.
+3. The phone reads the payment aloud. The customer taps **Approve** and enters the PIN on a big keypad. The voice says how many digits were typed, never which ones. Face ID or fingerprint is optional, in Settings.
+
 ## Quick start
 
 ### 1. Put the backend online (free, about 5 minutes)

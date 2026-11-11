@@ -37,6 +37,12 @@
   .hidden { display: none !important; }
   input[type=range] { width: 100%; accent-color: var(--ink); }
   .section-title { margin: 12px 4px 0; }
+  .pin-dots { display: flex; justify-content: center; gap: 18px; margin: 8px 0 4px; }
+  .pin-dots i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ink); }
+  .pin-dots i.on { background: var(--ink); }
+  .pinpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .pinpad button { font: inherit; font-size: 28px; font-weight: 600; min-height: 68px; border-radius: 14px; border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; }
+  .pinpad button:active { background: var(--paper); }
 </style>
 </head>
 <body>
@@ -49,6 +55,16 @@
   </div>
 </header>
 
+<!-- ============ DEMO PHONE: one tap, then Tapnod talks ============ -->
+<button class="screen" id="s-demo" style="border:0;background:var(--ink);color:#fff;font:inherit;text-align:left;padding:32px 24px;border-radius:20px;margin:16px 0;cursor:pointer;justify-content:space-between">
+  <span class="eyebrow" style="color:#8fe0a8">Tapnod · Amaka's phone</span>
+  <span>
+    <span class="h1" style="display:block">Tap anywhere to start</span>
+    <span class="lead" style="display:block;color:#cfcfc8;margin-top:16px" id="demo-sub">Tapnod will read every payment aloud. You approve with your fingerprint.</span>
+  </span>
+  <span class="small" style="color:#a7a7a0" id="demo-note">One tap turns on the voice. The first time, it also saves your fingerprint.</span>
+</button>
+
 <!-- ============ SIGNED OUT ============ -->
 
 <section class="screen" id="s-welcome">
@@ -59,21 +75,21 @@
   </div>
   <div class="spacer"></div>
   <p class="error" id="welcome-err" role="alert"></p>
-  <button class="btn btn-primary" id="finger-signin">Sign in with fingerprint</button>
-  <button class="btn" id="go-password">Sign in with account number</button>
-  <button class="btn btn-link" id="go-signup">New to Tapnod? Create an account</button>
+  <button class="btn btn-primary" id="go-password">Sign in</button>
+  <button class="btn hidden" id="finger-signin">Sign in with fingerprint</button>
+  <button class="btn" id="go-signup">Create an account</button>
 </section>
 
 <section class="screen" id="s-signin">
   <div class="stack">
     <div class="eyebrow">Sign in</div>
-    <h1 class="h2">Your account number and password</h1>
+    <h1 class="h2">Your account number and PIN</h1>
   </div>
   <form class="form card" id="signin-form" novalidate>
     <div class="field"><label for="in-acct">Account number</label>
       <input class="input mono" id="in-acct" inputmode="numeric" autocomplete="username" maxlength="10" placeholder="10 digits" required></div>
-    <div class="field"><label for="in-pass">Password</label>
-      <input class="input" id="in-pass" type="password" autocomplete="current-password" required></div>
+    <div class="field"><label for="in-pass">4-digit PIN</label>
+      <input class="input mono" id="in-pass" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="current-password" required></div>
     <p class="error" id="signin-err" role="alert"></p>
     <button class="btn btn-primary" type="submit">Sign in</button>
   </form>
@@ -83,7 +99,7 @@
 
 <section class="screen" id="s-signup">
   <div class="stack">
-    <div class="eyebrow">Create account · 1 of 3</div>
+    <div class="eyebrow">Create account · 1 of 2</div>
     <h1 class="h2">Your details</h1>
     <p class="body">Use the account your card is linked to.</p>
   </div>
@@ -92,11 +108,9 @@
       <input class="input" id="up-name" autocomplete="name" required></div>
     <div class="field"><label for="up-acct">Account number</label>
       <input class="input mono" id="up-acct" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="10 digits" required></div>
-    <div class="field"><label for="up-phone">Phone number <span class="hint">(optional)</span></label>
-      <input class="input mono" id="up-phone" inputmode="tel" autocomplete="tel"></div>
-    <div class="field"><label for="up-pass">Password</label>
-      <input class="input" id="up-pass" type="password" autocomplete="new-password" minlength="6" required>
-      <span class="hint">At least 6 characters.</span></div>
+    <div class="field"><label for="up-pass">Create a 4-digit PIN</label>
+      <input class="input mono" id="up-pass" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password" required>
+      <span class="hint">You'll use it to approve payments on this phone.</span></div>
     <div class="field"><label>Language for payments</label><div class="chips" id="up-langs"></div></div>
     <p class="error" id="signup-err" role="alert"></p>
     <button class="btn btn-primary" type="submit">Create account</button>
@@ -124,9 +138,13 @@
 
 <section class="screen" id="s-notify">
   <div class="stack">
-    <div class="eyebrow">Create account · 3 of 3</div>
+    <div class="eyebrow">Create account · 2 of 2</div>
     <h1 class="h2">Turn on notifications</h1>
     <p class="body">So your phone alerts you when a shop charges your card, even when Tapnod is closed or you're signed out.</p>
+    <div class="card idcard" style="margin-top:8px">
+      <div><div class="eyebrow">Your Tapnod ID</div><div class="num mono" id="new-id2">TN-0000-XX</div></div>
+      <p class="small">Shops find you on the Tapnod POS by your name or this ID.</p>
+    </div>
   </div>
   <div class="spacer"></div>
   <p class="error" id="notify-err" role="alert"></p>
@@ -174,10 +192,12 @@
     <p class="small" id="p-left"></p>
   </div>
   <div class="spacer"></div>
-  <form class="form hidden" id="pw-approve" novalidate>
-    <div class="field"><label for="ap-pass">Enter your Tapnod password to approve.</label>
-      <input class="input" id="ap-pass" type="password" autocomplete="current-password"></div>
-  </form>
+  <div class="card hidden" id="pw-approve" aria-label="Enter your PIN to approve">
+    <p class="center" style="font-weight:600">Enter your 4-digit PIN to approve</p>
+    <div class="pin-dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <p class="small center" id="pin-status" aria-live="polite">0 of 4 digits</p>
+    <div class="pinpad" id="pinpad" style="margin-top:12px"></div>
+  </div>
   <p class="error" id="approve-err" role="alert"></p>
   <button class="btn btn-link hidden" id="use-password" type="button">Use password instead</button>
   <button class="btn hidden" id="listen" data-t="tapToListen">Tap to listen</button>
@@ -215,7 +235,7 @@
 
   <div class="eyebrow section-title">Security</div>
   <div class="list">
-    <button class="row-item" id="set-finger"><span><span class="t">Fingerprint</span><span class="s" id="set-finger-s"></span></span><span class="small">Add</span></button>
+    <button class="row-item" id="set-finger"><span><span class="t">Use fingerprint to approve</span><span class="s" id="set-finger-s"></span></span><span class="small">Add</span></button>
     <button class="row-item" id="set-notify"><span><span class="t">Notifications</span><span class="s" id="set-notify-s"></span></span><span class="small">Turn on</span></button>
     <button class="row-item" id="test-notify"><span><span class="t">Send a test notification</span><span class="s" id="test-notify-s"></span></span><span class="small">Send</span></button>
   </div>
@@ -474,6 +494,7 @@ async function addFingerprint() {
     clientDataJSON: b64.enc(r.clientDataJSON), authenticatorData: b64.enc(r.getAuthenticatorData()),
   }});
   hasFinger = true;
+  localStorage.setItem('tapnod_has_passkey', '1');
 }
 
 function assertionBody(cred) {
@@ -525,13 +546,14 @@ async function enableNotifications() {
 }
 
 function renderStatus() {
+  I.setBio(hasFinger ? BIO : 'PIN');
   const n = 'Notification' in window ? Notification.permission : 'unsupported';
   const on = n === 'granted';
   $('st-notify').textContent = on ? 'On' : 'Off';
   $('st-notify').className = 'pill' + (on ? '' : ' off');
-  $('st-finger').textContent = hasFinger ? 'Added' : 'Not added';
-  $('st-finger').className = 'pill' + (hasFinger ? '' : ' off');
-  $('set-finger-s').textContent = hasFinger ? 'Added to this account' : 'Not added yet';
+  $('st-finger').textContent = hasFinger ? 'On' : 'PIN only';
+  $('st-finger').className = 'pill' + (hasFinger ? '' : ' grey');
+  $('set-finger-s').textContent = hasFinger ? 'On: faster than typing your PIN' : 'Optional: approve without typing your PIN';
   renameBiometric($('s-settings'));
   $('set-notify-s').textContent = on ? 'On for this phone' : n === 'denied' ? 'Blocked in Chrome' : 'Off';
   if (me) {
@@ -552,7 +574,11 @@ async function signedIn(r, opts = {}) {
   applyLanguage(); renderStatus();
   subscribePush();
   keepAwake();
-  if (opts.onboarding) { $('new-id').textContent = me.tapnod_id; prefetchRegister(); show('s-finger'); }
+  if (opts.onboarding) {
+    $('new-id2').textContent = me.tapnod_id;
+    show('s-notify');
+    phoneSay('Welcome ' + me.name.split(' ')[0] + '. Your account is ready. Turn on notifications so Tapnod can tell you when a shop charges your card.');
+  }
   else show('s-home');
   poll();
 }
@@ -573,13 +599,14 @@ $('signup-form').onsubmit = async (e) => {
   const btn = e.submitter || e.target.querySelector('button[type=submit]'); btn.disabled = true;
   try {
     const r = await api('/api/auth/signup', { body: {
-      name: $('up-name').value, account_number: $('up-acct').value, phone: $('up-phone').value,
-      password: $('up-pass').value, lang: local.signupLang,
+      name: $('up-name').value, account_number: $('up-acct').value,
+      pin: $('up-pass').value, lang: local.signupLang,
     }});
     await signedIn(r, { onboarding: true });
   } catch (err) {
     $('signup-err').textContent = err.message;
-    if (err.field) ({ name: $('up-name'), account_number: $('up-acct'), password: $('up-pass') })[err.field]?.focus();
+    say(err.message);
+    if (err.field) ({ name: $('up-name'), account_number: $('up-acct'), pin: $('up-pass') })[err.field]?.focus();
   } finally { btn.disabled = false; }
 };
 
@@ -587,10 +614,10 @@ $('signin-form').onsubmit = async (e) => {
   e.preventDefault();
   $('signin-err').textContent = '';
   try {
-    const r = await api('/api/auth/login', { body: { account_number: $('in-acct').value, password: $('in-pass').value } });
+    const r = await api('/api/auth/login', { body: { account_number: $('in-acct').value, pin: $('in-pass').value } });
     $('in-pass').value = '';
     await signedIn(r);
-  } catch (err) { $('signin-err').textContent = err.message; }
+  } catch (err) { $('signin-err').textContent = err.message; say(err.message); }
 };
 
 $('do-finger').onclick = async () => {
@@ -654,10 +681,14 @@ function showPending(req) {
   $('p-text').textContent = I.sayFor(L(), 'pending', req).shown;
   $('p-card').textContent = req.card_last4 ? (req.card_scheme || 'Card') + ' ···· ' + req.card_last4 : 'Charged to your Tapnod account';
   $('approve-err').textContent = '';
-  $('pw-approve').classList.toggle('hidden', hasFinger);
-  $('use-password').classList.toggle('hidden', !hasFinger);
+  // Approve = PIN on a big keypad. Face ID / fingerprint is offered first only if the customer added it.
   usePassword = !hasFinger;
-  $('approve').textContent = hasFinger ? I.t(L(), 'approve') : 'Approve with password';
+  pin = ''; renderPin();
+  $('pw-approve').classList.add('hidden');
+  $('use-password').classList.toggle('hidden', !hasFinger);
+  $('use-password').textContent = 'Use PIN instead';
+  $('approve').textContent = hasFinger ? I.t(L(), 'approve') : 'Approve';
+  $('approve').classList.remove('hidden');
   renameBiometric($('s-pending'));
   $('listen').classList.add('hidden');
   if ($('s-settings').classList.contains('on')) lastScreen = 's-pending'; else show('s-pending');
@@ -734,21 +765,49 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') { if (me) keepAwake(); setTimeout(() => approveWithFinger(true), 400); }
 });
 
-let usePassword = false;
-$('use-password').onclick = () => {
+let usePassword = false, pin = '';
+function renderPin() {
+  document.querySelectorAll('.pin-dots i').forEach((d, i) => d.classList.toggle('on', i < pin.length));
+  $('pin-status').textContent = pin.length + ' of 4 digits';
+}
+function openPinPad() {
   usePassword = true;
+  pin = ''; renderPin();
   $('pw-approve').classList.remove('hidden');
   $('use-password').classList.add('hidden');
-  $('approve').textContent = 'Approve with password';
-  $('ap-pass').focus();
-};
-$('approve').onclick = async () => {
-  if (hasFinger && !usePassword) return approveWithFinger(false);
+  $('approve').classList.add('hidden');
+  phoneSay('Enter your four digit PIN.');
+}
+// Spoken feedback says how many digits, never which digits, so nobody nearby hears the PIN.
+async function pinKey(k) {
+  if (k === 'del') pin = pin.slice(0, -1);
+  else if (pin.length < 4) pin += k;
+  renderPin();
+  if (navigator.vibrate) navigator.vibrate(20);
+  if (pin.length < 4) { phoneSay(k === 'del' ? pin.length + ' digits' : String(pin.length)); return; }
+  $('approve-err').textContent = '';
   try {
-    const r = await api('/api/customer/requests/' + current.request_id + '/approve', { body: { password: $('ap-pass').value } });
-    $('ap-pass').value = '';
+    const r = await api('/api/customer/requests/' + current.request_id + '/approve', { body: { pin } });
     showResult(r.request);
-  } catch (e) { $('approve-err').textContent = e.message; }
+  } catch (e) {
+    pin = ''; renderPin();
+    $('approve-err').textContent = e.message;
+    phoneSay(e.message);
+  }
+}
+for (const k of ['1','2','3','4','5','6','7','8','9','','0','del']) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  if (!k) { b.style.visibility = 'hidden'; b.setAttribute('aria-hidden', 'true'); }
+  b.textContent = k === 'del' ? '⌫' : k;
+  b.setAttribute('aria-label', k === 'del' ? 'Delete' : k);
+  b.onclick = () => pinKey(k);
+  $('pinpad').appendChild(b);
+}
+$('use-password').onclick = openPinPad;
+$('approve').onclick = () => {
+  if (hasFinger && !usePassword) return approveWithFinger(false);
+  openPinPad();
 };
 $('decline').onclick = async () => {
   if (!current) return;
@@ -772,6 +831,8 @@ function showResult(req) {
   show('s-result');
   if (navigator.vibrate) navigator.vibrate(good ? [80] : [300]);
   say(words.spoken);
+  const shownId = req.request_id;
+  setTimeout(() => { if ($('s-result').classList.contains('on') && current && current.request_id === shownId) { current = null; show('s-home'); } }, 9000);
 }
 $('done').onclick = () => { current = null; show('s-home'); };
 
@@ -781,12 +842,44 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+/* ---------------- demo phone ---------------- */
+const IS_DEMO = location.pathname === '/demo';
+async function startDemoSession() {
+  const r = await (await fetch('/api/demo/session', { method: 'POST' })).json();
+  if (!r.token) throw new Error(r.message || 'Demo mode is off.');
+  token = r.token; localStorage.setItem('tapnod_token', token);
+  const info = await api('/api/me');
+  me = info.customer; hasFinger = info.has_fingerprint;
+  applyLanguage(); renderStatus();
+  if (!hasFinger) prefetchRegister();
+  show('s-demo');
+}
+$('s-demo').onclick = async () => {
+  unlockSound(); keepAwake();
+  if (!hasFinger && canPasskey()) {
+    $('demo-note').textContent = 'Touch the fingerprint sensor to save it…';
+    try { await addFingerprint(); }
+    catch (e) {
+      $('demo-note').textContent = e.message + ' (You can still approve with PIN 1234.)';
+      if (/Ready/.test(e.message)) return; // it just needed one more tap
+    }
+  }
+  renderStatus(); subscribePush();
+  show('s-home');
+  phoneSay('Hello ' + me.name.split(' ')[0] + '. Tapnod is on. When a shop charges your card, I will read the amount to you. '
+    + (hasFinger ? 'Touch the fingerprint sensor to approve.' : 'Tap approve, then enter your PIN.'));
+};
+
 /* ---------------- start ---------------- */
 async function boot() {
   try { config = await (await fetch('/api/config')).json(); } catch {}
   if (config.nigerian_voices) { try { ngVoices = (await (await fetch('/api/voices')).json()).voices || []; } catch {} }
   await registerWorker();
   applyLanguage();
+  if (IS_DEMO) {
+    try { await startDemoSession(); poll(); return; }
+    catch (e) { $('welcome-err').textContent = e.message; }
+  }
   if (token) {
     try {
       const info = await api('/api/me');
@@ -798,8 +891,9 @@ async function boot() {
       return;
     } catch { /* token expired: fall through to sign in */ }
   }
-  prefetchLogin();
+  if (localStorage.getItem('tapnod_has_passkey')) { $('finger-signin').classList.remove('hidden'); prefetchLogin(); }
   show(location.hash === '#signup' ? 's-signup' : 's-welcome');
+  phoneSay('Welcome to Tapnod. Sign in, or create an account.');
 }
 boot();
 setInterval(poll, 1000);
