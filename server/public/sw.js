@@ -9,7 +9,7 @@ self.addEventListener('push', (event) => {
   event.waitUntil((async () => {
     // If the Tapnod page is already on screen, it shows and speaks the payment itself.
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const visible = windows.some((w) => w.visibilityState === 'visible');
+    const visible = windows.some((w) => w.visibilityState === 'visible' && w.focused);
     windows.forEach((w) => w.postMessage({ type: 'tapnod-push', data }));
     if (visible && data.request_id) return;
     await self.registration.showNotification(data.title || 'Tapnod', {

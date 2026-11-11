@@ -170,6 +170,8 @@
     <div class="h3" data-t="waiting">Waiting for a payment</div>
     <p class="body" style="margin-top:6px" data-t="waitingBody"></p>
   </div>
+  <button class="btn btn-primary hidden" id="home-notify" style="min-height:64px">Turn on notifications</button>
+  <p class="error" id="home-notify-err" role="alert"></p>
   <div class="grid grid-2">
     <button class="card tile-stat" style="text-align:left;font:inherit;cursor:pointer" data-settings>
       <span class="eyebrow">Notifications</span><span class="pill" id="st-notify">…</span></button>
@@ -550,6 +552,7 @@ function renderStatus() {
   const n = 'Notification' in window ? Notification.permission : 'unsupported';
   const on = n === 'granted';
   $('st-notify').textContent = on ? 'On' : 'Off';
+  $('home-notify').classList.toggle('hidden', on || n === 'unsupported');
   $('st-notify').className = 'pill' + (on ? '' : ' off');
   $('st-finger').textContent = hasFinger ? 'On' : 'PIN only';
   $('st-finger').className = 'pill' + (hasFinger ? '' : ' grey');
@@ -634,6 +637,12 @@ $('do-notify').onclick = async () => {
   if (r === true) { phoneSay(I.t(L(), 'sample')); show('s-home'); } else $('notify-err').textContent = r;
 };
 $('skip-notify').onclick = () => show('s-home');
+$('home-notify').onclick = async () => {
+  $('home-notify-err').textContent = '';
+  const r = await enableNotifications();
+  if (r === true) { phoneSay('Notifications are on. Tapnod will alert you even when this page is closed.'); renderStatus(); }
+  else { $('home-notify-err').textContent = r; phoneSay(r); }
+};
 
 /* ---------------- settings ---------------- */
 document.querySelectorAll('[data-settings]').forEach((b) => { b.onclick = () => $('open-settings').click(); });
@@ -866,6 +875,8 @@ $('s-demo').onclick = async () => {
   }
   renderStatus(); subscribePush();
   show('s-home');
+  // Same tap: ask for notifications too (without waiting on the answer, so the screen never gets stuck).
+  if ('Notification' in window && Notification.permission === 'default') enableNotifications().then(() => renderStatus()).catch(() => {});
   phoneSay('Hello ' + me.name.split(' ')[0] + '. Tapnod is on. When a shop charges your card, I will read the amount to you. '
     + (hasFinger ? 'Touch the fingerprint sensor to approve.' : 'Tap approve, then enter your PIN.'));
 };
