@@ -138,13 +138,19 @@ For customers with a basic phone, or when the app isn't open. On the POS waiting
 - If she approves in the app while on the call, the call ends by itself.
 - Each call carries a one-time code from the server, so nothing else can approve through the voice endpoint.
 
+**Option 0: Twilio free trial (no card, 75 free minutes).** Simplest for one demo phone.
+
+1. Sign up at twilio.com/try-twilio **with the Nigerian number you'll call** (it's verified automatically; trial calls only go to verified numbers in your sign-up country).
+2. From the console, copy the **Account SID**, **Auth Token**, and the trial **From** number shown on Voice > Try out Voice.
+3. Give the server `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` and `PUBLIC_URL=https://<your-site>`. Nothing to set in Twilio: each call tells Twilio where to fetch its script.
+
 **Option 1: Africa's Talking (Nigerian number, cheapest).** No agent to deploy: the server does everything.
 
 1. On africastalking.com (Live account, not Sandbox), request a Nigerian voice number: Voice, Phone numbers, request form, category **Test Number**.
 2. Set the number's **callback URL** to `https://<your-site>/api/at/voice`.
 3. Give the server `AT_USERNAME`, `AT_API_KEY` and `AT_VOICE_NUMBER` (e.g. `+234...`). Set `PUBLIC_URL=https://<your-site>` if your host doesn't pass https headers.
 
-When these are set, the POS uses Africa's Talking. Otherwise it uses LiveKit (below).
+The POS uses Twilio if it's set, then Africa's Talking, then LiveKit (below).
 
 **Option 2: LiveKit.** Set up (once):
 
@@ -182,8 +188,9 @@ Fingerprint only works over https, so test it on Render or `localhost`, not on a
 | `TOKEN_SECRET` | Key for card tokens. Must match **Card token secret** in the POS settings. Default `tapnod-demo-secret`. |
 | `YARNGPT_API_KEY` | Turns on Nigerian voices. Every call spends YarnGPT credits. |
 | `VAPID_SECRET` | Signs sign-in sessions and keeps notification keys the same across restarts. Render generates it. |
-| `AT_USERNAME`, `AT_API_KEY`, `AT_VOICE_NUMBER` | Phone calls through Africa's Talking (used first when set). |
-| `PUBLIC_URL` | This site's public https address, for Africa's Talking callbacks. |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | Phone calls through Twilio (used first when set). |
+| `AT_USERNAME`, `AT_API_KEY`, `AT_VOICE_NUMBER` | Phone calls through Africa's Talking. |
+| `PUBLIC_URL` | This site's public https address, for Twilio and Africa's Talking callbacks. |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | Phone calls through LiveKit instead. |
 | `DEMO_PHONE` | Number the POS rings for Amaka when none is typed, e.g. `08031234567`. |
 | `DEMO_AUTO_LINK` | Demo shortcut for unknown cards: `latest` (default) links them to the most recent sign-up, a customer id links them to that customer, empty gives the real "Card not linked" behaviour. |
