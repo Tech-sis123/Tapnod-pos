@@ -18,12 +18,23 @@ services:
       # Signs sign-in sessions and keeps notification keys stable. Render makes a random value once.
       - key: VAPID_SECRET
         generateValue: true
-      # Demo shortcut: an unknown card is linked to the most recent sign-up. Set to empty to disable.
+      # Demo shortcut: any unknown card charges the demo customer Amaka. Set to empty to disable.
       - key: DEMO_AUTO_LINK
-        value: latest
+        value: demo
       # Nigerian voices. Paste your key from yarngpt.ai in the Render dashboard.
       - key: YARNGPT_API_KEY
         sync: false
+      # Phone-call approval through Twilio. Fill these in the Render dashboard.
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM
+        sync: false
+      - key: DEMO_PHONE
+        sync: false
+      - key: PUBLIC_URL
+        value: https://tapnod-demo.onrender.com
 
 databases:
   # Free Render Postgres: 1 GB, expires 30 days after creation (then a 14-day grace period).
