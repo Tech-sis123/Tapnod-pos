@@ -31,11 +31,9 @@ spec:
         # Data is kept in memory in the sandbox (one replica). Add DATABASE_URL to use Postgres.
         envFrom:
         - secretRef: { name: huawei-gateway, optional: true }
-        # Phone-call approvals. Twilio: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM, PUBLIC_URL.
-        # Africa's Talking: AT_USERNAME, AT_API_KEY, AT_VOICE_NUMBER, PUBLIC_URL.
-        # Or LiveKit. Create once:
-        #   kubectl create secret generic tapnod-calls --from-literal=LIVEKIT_URL=wss://... \
-        #     --from-literal=LIVEKIT_API_KEY=... --from-literal=LIVEKIT_API_SECRET=... --from-literal=DEMO_PHONE=080...
+        # Phone-call approvals. Create once (Infobip shown; Africa's Talking uses AT_USERNAME, AT_API_KEY, AT_VOICE_NUMBER):
+        #   kubectl create secret generic tapnod-calls --from-literal=IB_BASE_URL=xxxxx.api.infobip.com \
+        #     --from-literal=IB_API_KEY=... --from-literal=PUBLIC_URL=https://teamXX.xtradot.co --from-literal=DEMO_PHONE=080...
         - secretRef: { name: tapnod-calls, optional: true }
         readinessProbe:
           httpGet: { path: /healthz, port: 8080 }

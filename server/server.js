@@ -11,9 +11,7 @@ const tts = require('./tts');
 const auth = require('./auth');
 const calls = require('./calls');
 const atcalls = require('./atcalls');
-const twcalls = require('./twcalls');
-const plcalls = require('./plcalls');
-const vgcalls = require('./vgcalls');
+const ibcalls = require('./ibcalls');
 const i18n = require('./public/i18n');
 
 const PORT = process.env.PORT || 3000;
@@ -34,10 +32,6 @@ const REQUEST_TTL_MS = 120_000;
 const DEMO_PHONE = process.env.DEMO_PHONE || '';
 // Phone calls: pressing 1 approves. Set CALL_REQUIRE_PIN=on to also ask for the 4-digit PIN.
 const CALL_PIN = process.env.CALL_REQUIRE_PIN === 'on';
-// Free phone calls: your own Android phone dials (/gateway), the laptop talks and listens (/callcenter).
-// Set CALL_BRIDGE_KEY to any secret word and open both pages with ?key=<that word>.
-const BRIDGE_KEY = process.env.CALL_BRIDGE_KEY || '';
-const bridgeSeen = { callcenter: 0, gateway: 0 };
 const LANGS = Object.keys(i18n.LANGS);
 
 const vapid = push.vapidFromSecret(APP_SECRET);
@@ -71,8 +65,6 @@ const STATIC = {
   '/app': ['app.html', 'text/html; charset=utf-8'],
   '/demo': ['app.html', 'text/html; charset=utf-8'],
   '/pos': ['pos.html', 'text/html; charset=utf-8'],
-  '/callcenter': ['callcenter.html', 'text/html; charset=utf-8'],
-  '/gateway': ['gateway.html', 'text/html; charset=utf-8'],
   '/tapnod.css': ['tapnod.css', 'text/css; charset=utf-8'],
   '/i18n.js': ['i18n.js', 'application/javascript; charset=utf-8'],
   '/sw.js': ['sw.js', 'application/javascript; charset=utf-8'],
@@ -437,105 +429,51 @@ async function route(req, res) {
     return send(res, 200, { status: r.status, reference: r.reference, call: r.call ? r.call.status : null });
   }
 
-  // Ask for approval by phone call instead: LiveKit rings the customer and she types her PIN on the keypad.
+  // Ask for approval by phone call instead: Infobip (or Africa's Talking) rings her, she presses 1 or 2 on the keypad.
   if (m === 'POST' && (match = p.match(/^\/api\/pos\/requests\/([\w-]+)\/call$/))) {
     const r = requests.get(match[1]);
     if (!r || refresh(r).status !== 'pending') return send(res, 409, { message: 'This payment is no longer waiting.' });
-    if (!BRIDGE_KEY && !plcalls.enabled() && !vgcalls.enabled() && !calls.enabled() && !atcalls.enabled() && !twcalls.enabled()) return send(res, 503, { message: 'Phone calls are not set up on this server yet.' });
+    if (!ibcalls.enabled() && !atcalls.enabled()) return send(res, 503, { message: 'Phone calls are not set up on this server yet.' });
     const b = (await readJson(req)) || {};
     const c = await db.getCustomer(r.customer_id);
     const phone = calls.normalisePhone(b.phone || (c && c.phone) || (c && c.id === DEMO.id ? DEMO_PHONE : ''));
     if (!phone) return send(res, 400, { message: 'Type the customer\'s phone number, like 0803 123 4567.' });
-    const room = 'tapnod-call-' + r.request_id;
     r.call = { status: 'calling', phone, tries: 0, origin: (process.env.PUBLIC_URL || siteOf(req).origin).replace(/\/+$/, '') };
-    if (BRIDGE_KEY) {
-      if (Date.now() - bridgeSeen.callcenter > 8000) {
-        r.call.status = 'failed';
-        return send(res, 503, { message: 'Open /callcenter on the laptop first (it does the talking).' });
-      }
-      r.call.status = 'queued';
-      return send(res, 200, { ok: true, phone: calls.maskPhone(phone) });
-    }
-    for (const [kit, path, name] of [[plcalls, 'pl', 'Plivo'], [vgcalls, 'vg', 'Vonage']]) {
-      if (!kit.enabled()) continue;
-      const t = atcalls.stepToken(APP_SECRET, r.request_id);
-      const base = `${r.call.origin}/api/${path}/voice?r=${r.request_id}&t=${t}`;
-      try {
-        r.call.session = await kit.dial(phone, base + '&step=start', `${r.call.origin}/api/${path}/event?r=${r.request_id}&t=${t}`);
-      } catch (e) {
-        console.warn('call failed', e.message);
-        r.call.status = 'failed';
-        return send(res, 502, { message: `Couldn't start the call (${name}): ` + e.message });
-      }
-      return send(res, 200, { ok: true, phone: calls.maskPhone(phone) });
-    }
-    if (twcalls.enabled()) {
-      const t = atcalls.stepToken(APP_SECRET, r.request_id);
-      const base = `${r.call.origin}/api/tw/voice?r=${r.request_id}&t=${t}`;
-      try {
-        r.call.session = await twcalls.dial(phone, base + '&step=start', `${r.call.origin}/api/tw/status?r=${r.request_id}&t=${t}`);
-      } catch (e) {
-        console.warn('call failed', e.message);
-        r.call.status = 'failed';
-        return send(res, 502, { message: 'Couldn\'t start the call: ' + e.message });
-      }
-      return send(res, 200, { ok: true, phone: calls.maskPhone(phone) });
-    }
-    if (atcalls.enabled()) {
-      try {
-        r.call.session = await atcalls.dial(phone, r.request_id);
-      } catch (e) {
-        console.warn('call failed', e.message);
-        r.call.status = 'failed';
-        return send(res, 502, { message: 'Couldn\'t start the call. Check the Africa\'s Talking settings and balance.' });
-      }
-      return send(res, 200, { ok: true, phone: calls.maskPhone(phone) });
-    }
+    const provider = ibcalls.enabled() ? 'Infobip' : 'Africa\'s Talking';
     try {
-      await calls.dial(room, {
-        request_id: r.request_id,
-        call_token: calls.callToken(APP_SECRET, r.request_id),
-        callback: siteOf(req).origin + '/api/voice/requests/' + r.request_id,
-        phone,
-        first_name: String((c && c.name) || '').split(' ')[0],
-        merchant: r.merchant_name,
-        amount_words: i18n.moneyWords(r.amount_kobo),
-      });
+      r.call.session = ibcalls.enabled()
+        ? await ibcalls.dial(phone, { origin: r.call.origin, requestId: r.request_id, token: atcalls.stepToken(APP_SECRET, r.request_id) })
+        : await atcalls.dial(phone, r.request_id);
     } catch (e) {
       console.warn('call failed', e.message);
       r.call.status = 'failed';
-      return send(res, 502, { message: 'Couldn\'t start the call. Check the LiveKit settings.' });
+      return send(res, 502, { message: `Couldn't start the call (${provider}): ` + e.message });
     }
     return send(res, 200, { ok: true, phone: calls.maskPhone(phone) });
   }
 
-  // Free call bridge. The laptop (/callcenter) takes the next call to talk on;
-  // the Android phone (/gateway) takes the number to dial.
-  if (m === 'GET' && (p === '/api/bridge/next' || p === '/api/bridge/dial')) {
-    if (!BRIDGE_KEY || url.searchParams.get('key') !== BRIDGE_KEY) return send(res, 403, { message: 'Wrong key.' });
-    const who = p.endsWith('next') ? 'callcenter' : 'gateway';
-    bridgeSeen[who] = Date.now();
-    const live = [...requests.values()].filter((x) => x.call && refresh(x).status === 'pending');
-    if (who === 'gateway') {
-      const r = live.find((x) => ['queued', 'calling'].includes(x.call.status) && !x.call.dialed);
-      if (!r) return send(res, 200, { dial: null, callcenter: Date.now() - bridgeSeen.callcenter < 8000 });
-      r.call.dialed = Date.now();
-      return send(res, 200, { dial: { request_id: r.request_id, phone: r.call.phone } });
+  // Infobip's call script asks what to say next (see ibcalls.js). Each turn carries the signed token.
+  if (m === 'POST' && p === '/api/ib/step') {
+    const b = (await readJson(req)) || {};
+    const r = requests.get(String(b.r || ''));
+    if (!r || !r.call || !atcalls.checkStepToken(APP_SECRET, r.request_id, b.t)) return send(res, 200, ibcalls.toReply([ibcalls.say('Goodbye.')]));
+    const step = ['start', 'choice', 'pin'].includes(b.step) ? b.step : 'end';
+    const next = (st) => `${r.call.origin}/api/ib/step?step=${st}`;
+    return send(res, 200, ibcalls.toReply(await voiceStep(r, step, b.digits, ibcalls, next)));
+  }
+
+  // Infobip's report when the call is over: tells the POS if she never picked up.
+  if (m === 'POST' && p === '/api/ib/report') {
+    const b = (await readJson(req)) || {};
+    for (const x of b.results || []) {
+      const r = requests.get(String(x.callbackData || ''));
+      if (!r || !r.call) continue;
+      const group = (x.status && x.status.groupName) || '';
+      if (['calling', 'answered'].includes(r.call.status)) {
+        r.call.status = group === 'DELIVERED' && r.call.status === 'answered' ? 'ended' : 'failed';
+      }
     }
-    const r = live.find((x) => x.call.status === 'queued');
-    if (!r) return send(res, 200, { call: null, gateway: Date.now() - bridgeSeen.gateway < 8000 });
-    r.call.status = 'calling';
-    const c = await db.getCustomer(r.customer_id);
-    return send(res, 200, {
-      call: {
-        request_id: r.request_id,
-        call_token: calls.callToken(APP_SECRET, r.request_id),
-        phone: r.call.phone,
-        first_name: String((c && c.name) || '').split(' ')[0],
-        merchant: r.merchant_name,
-        amount_words: i18n.moneyWords(r.amount_kobo),
-      },
-    });
+    return send(res, 200, { ok: true });
   }
 
   // Africa's Talking asks what to do on the call. Set this as the voice number's callback URL:
@@ -560,65 +498,6 @@ async function route(req, res) {
     return out(await voiceStep(r, step, f.dtmfDigits, atcalls, next));
   }
 
-  // Plivo (XML) and Vonage (JSON) fetch what to say from here, and report call progress to /event.
-  if (m === 'POST' && (match = p.match(/^\/api\/(pl|vg)\/(voice|event)$/))) {
-    const [, who, kind] = match;
-    const f = await atcalls.readForm(req); // handles both form posts (Plivo) and JSON (Vonage)
-    const r = requests.get(url.searchParams.get('r') || '');
-    const kit = who === 'pl' ? plcalls : vgcalls;
-    const out = (body) => {
-      res.writeHead(200, { 'Content-Type': who === 'pl' ? 'text/xml; charset=utf-8' : 'application/json' });
-      res.end(who === 'pl' ? plcalls.xml(body) : body);
-    };
-    const empty = who === 'pl' ? '' : '[]';
-    if (!r || !r.call || !atcalls.checkStepToken(APP_SECRET, r.request_id, url.searchParams.get('t'))) return out(who === 'pl' ? plcalls.say('Goodbye.') : vgcalls.join([vgcalls.say('Goodbye.')]));
-    if (kind === 'event') {
-      const st = String(f.status || f.CallStatus || '').toLowerCase();
-      if (['answered', 'in-progress'].includes(st) && r.call.status === 'calling') r.call.status = 'answered';
-      if (['busy', 'failed', 'timeout', 'unanswered', 'rejected', 'cancelled', 'no-answer'].includes(st)) r.call.status = 'failed';
-      if (st === 'completed' && ['calling', 'answered'].includes(r.call.status)) r.call.status = r.call.status === 'calling' ? 'failed' : 'ended';
-      return out(empty);
-    }
-    const digits = who === 'pl' ? f.Digits : (f.dtmf && f.dtmf.digits);
-    const next = (st) => `${r.call.origin}/api/${who}/voice?r=${r.request_id}&step=${st}&t=${atcalls.stepToken(APP_SECRET, r.request_id)}`;
-    return out(await voiceStep(r, url.searchParams.get('step') || 'start', digits, kit, next));
-  }
-
-  // Twilio fetches what to say from here. Every URL we give Twilio carries the payment id and a signed token.
-  if (m === 'POST' && (p === '/api/tw/voice' || p === '/api/tw/status')) {
-    const f = await atcalls.readForm(req);
-    const r = requests.get(url.searchParams.get('r') || '');
-    const out = (inner) => { res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' }); res.end(twcalls.xml(inner)); };
-    if (!r || !r.call || !atcalls.checkStepToken(APP_SECRET, r.request_id, url.searchParams.get('t'))) return out(twcalls.say('Goodbye.'));
-    if (p === '/api/tw/status') {
-      const st = String(f.CallStatus || '');
-      if (st === 'in-progress' && r.call.status === 'calling') r.call.status = 'answered';
-      if (['busy', 'no-answer', 'failed', 'canceled'].includes(st)) r.call.status = 'failed';
-      if (st === 'completed' && ['calling', 'answered'].includes(r.call.status)) r.call.status = r.call.status === 'calling' ? 'failed' : 'ended';
-      return out('');
-    }
-    const next = (st) => `${r.call.origin}/api/tw/voice?r=${r.request_id}&step=${st}&t=${atcalls.stepToken(APP_SECRET, r.request_id)}`;
-    return out(await voiceStep(r, url.searchParams.get('step') || 'start', f.Digits, twcalls, next));
-  }
-
-  // The phone-call agent reports back here: call progress, and the customer's choice with her PIN.
-  if (m === 'POST' && (match = p.match(/^\/api\/voice\/requests\/([\w-]+)$/))) {
-    const r = requests.get(match[1]);
-    const b = (await readJson(req)) || {};
-    if (!r || !calls.checkCallToken(APP_SECRET, r.request_id, b.call_token)) return send(res, 403, { message: 'Not allowed.' });
-    refresh(r);
-    if (b.action === 'call_status' && r.call && ['answered', 'failed', 'ended'].includes(b.status)) r.call.status = b.status;
-    if (b.action === 'approve' || b.action === 'decline') {
-      if (r.status !== 'pending') return send(res, 409, { status: r.status });
-      if (b.action === 'approve') {
-        const c = await db.getCustomer(r.customer_id);
-        if (CALL_PIN && (!c || !auth.checkPassword(String(b.pin || ''), c.password_hash))) return send(res, 401, { status: r.status, message: 'Wrong PIN.' });
-      }
-      r.status = b.action === 'approve' ? 'approved' : 'declined';
-    }
-    return send(res, 200, { status: r.status });
-  }
-
   if (m === 'POST' && (match = p.match(/^\/api\/pos\/requests\/([\w-]+)\/cancel$/))) {
     const r = requests.get(match[1]);
     if (r && refresh(r).status === 'pending') r.status = 'cancelled';
@@ -628,9 +507,9 @@ async function route(req, res) {
   send(res, 404, { message: 'Not found.' });
 }
 
-// One phone-call script for Africa's Talking and Twilio: read the payment, 1 = approve, 2 = decline, then the PIN.
+// One phone-call script for Infobip and Africa's Talking: read the payment, 1 = approve, 2 = decline, then the PIN.
 async function voiceStep(r, step, rawDigits, kit, next) {
-  // kit.say / kit.getDigits make one instruction; kit.join puts a list of them together (XML text or Vonage JSON).
+  // kit.say / kit.getDigits make one instruction; kit.join puts a list of them together (XML text or Infobip objects).
   const join = kit.join || ((items) => items.join(''));
   const c = await db.getCustomer(r.customer_id);
   const amount = i18n.moneyWords(r.amount_kobo);

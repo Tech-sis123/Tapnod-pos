@@ -24,27 +24,19 @@ services:
       # Nigerian voices. Paste your key from yarngpt.ai in the Render dashboard.
       - key: YARNGPT_API_KEY
         sync: false
-      # Free phone calls with your own Android phone: any secret word. Open /callcenter?key=WORD and /gateway?key=WORD.
-      - key: CALL_BRIDGE_KEY
+      # Phone-call approval through Infobip (free trial). Fill these in the Render dashboard.
+      - key: IB_BASE_URL
         sync: false
-      # Phone calls through Plivo (free $10 trial credit): fill these in the Render dashboard.
-      - key: PLIVO_AUTH_ID
+      - key: IB_API_KEY
         sync: false
-      - key: PLIVO_AUTH_TOKEN
+      - key: IB_FROM
         sync: false
-      - key: PLIVO_FROM
+      # Or Africa's Talking, once the Nigerian voice number is approved.
+      - key: AT_USERNAME
         sync: false
-      # Or through Vonage (free trial credit): application id and its private key.
-      - key: VONAGE_APPLICATION_ID
+      - key: AT_API_KEY
         sync: false
-      - key: VONAGE_PRIVATE_KEY
-        sync: false
-      # Phone-call approval through Twilio. Fill these in the Render dashboard.
-      - key: TWILIO_ACCOUNT_SID
-        sync: false
-      - key: TWILIO_AUTH_TOKEN
-        sync: false
-      - key: TWILIO_FROM
+      - key: AT_VOICE_NUMBER
         sync: false
       - key: DEMO_PHONE
         sync: false

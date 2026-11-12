@@ -123,64 +123,36 @@ Phone browsers only allow sound and fingerprint prompts after the person has tap
 
 ## Approval by phone call
 
-For customers with a basic phone, or when the app isn't open. On the POS waiting screen, type her number (or leave it empty to use the one on her account) and press **Call her phone**.
+For customers with a basic phone, or when the app isn't open. On the POS waiting screen, type her number (or leave it empty to use the one on her account) and press **Call her phone**. Nobody else touches anything: the server starts the call, and her key press approves.
 
 ```text
- POS: Call her phone ──> Tapnod server ──> LiveKit ──> caller agent ──> rings her phone
-                                                         │
-   "Hello Amaka. Bisi Ventures is asking you to pay fifteen thousand naira.
-    To approve, press 1. To decline, press 2."   ->  1
-                                                         │
- POS shows Approved <── Tapnod server records her choice <───┘
+ POS: Call her phone ──> Tapnod server ──> Infobip ──> rings her phone
+                              ▲                            │
+                              │   "Hello Amaka. Bisi Ventures is asking you to pay
+                              │    fifteen thousand naira. To approve, press 1.
+                              │    To decline, press 2."   ->  1
+                              │                            │
+ POS shows Approved <── server records her choice <── Infobip asks the server what to say next
 ```
 
-- Pressing 1 approves. Set `CALL_REQUIRE_PIN=on` to also ask for her 4-digit PIN (never read back, 3 tries).
+- Pressing 1 approves, 2 declines. No answer twice ends the call and nothing is paid. Set `CALL_REQUIRE_PIN=on` to also ask for her 4-digit PIN (never read back, 3 tries).
 - If she approves in the app while on the call, the call ends by itself.
-- Each call carries a one-time code from the server, so nothing else can approve through the voice endpoint.
+- Each call carries a token only this server can make, so nothing else can approve through the voice endpoint.
 
-**Option A: free, with your own phones (no service at all).** Your Android phone makes a normal call from its own SIM; the laptop talks and listens.
+**Infobip (free 60-day trial, used first when set).** Trial calls only go to the mobile number you verified at sign-up, and last up to 5 minutes.
 
-1. Set `CALL_BRIDGE_KEY` on the server to any secret word, e.g. `tapnod2026`.
-2. Laptop: open `https://<your-site>/callcenter?key=tapnod2026` in its **own window** and press **Start** (allow the microphone).
-3. Android phone: open `https://<your-site>/gateway?key=tapnod2026` and keep it open.
-4. POS: **Call her phone**. The Android phone shows a big **Call** button: tap it, tap Call, turn on **loudspeaker**, and place it next to the laptop.
-5. The laptop speaks the payment; she presses 1 or 2 on her phone; the laptop hears the key tone (DTMF) and approves or declines. The page also has **She pressed 1 / 2** buttons as a backup for a noisy room.
+1. Sign up at infobip.com **with the button phone's SIM number**, and verify it by SMS.
+2. On the Infobip homepage, copy your **API Base URL** (looks like `xxxxx.api.infobip.com`) and create an **API key** (Developer tools, API keys).
+3. Give the server `IB_BASE_URL`, `IB_API_KEY`, `PUBLIC_URL=https://<your-site>` and `DEMO_PHONE` (the verified number). Optional: `IB_FROM`, the caller number shown in Infobip's "Send your first voice message" page.
+4. Redeploy and press **Call her phone**. The first call creates the call script on Infobip by itself (`tapnod-approval-...` under Voice, IVR scenarios); the logs print its id.
 
-When `CALL_BRIDGE_KEY` is set it is used first.
+How it works (`server/ibcalls.js`): the server creates one IVR scenario, then launches it for each payment with the request id and a signed token. When she answers, the scenario posts to `/api/ib/step`, says the `reply` it gets back, collects her key press and posts it on the next turn, until the server answers `done: yes`. When the call ends, Infobip posts a report to `/api/ib/report`, so the POS shows "no answer" if she never picked up.
 
-**Option B: Plivo or Vonage (free trial credit, no card).**
+**Africa's Talking (Nigerian number, cheapest; waiting for number approval).**
 
-- **Plivo:** sign up at plivo.com (comes with free credit), copy the **Auth ID** and **Auth Token** from the dashboard, and the caller number you're given. Set `PLIVO_AUTH_ID`, `PLIVO_AUTH_TOKEN`, `PLIVO_FROM` and `PUBLIC_URL`.
-- **Vonage:** sign up at dashboard.nexmo.com with the number you'll call (trial accounts can call that number with `123456789` as the caller). Create a **Voice application**, generate its key pair, and set `VONAGE_APPLICATION_ID`, `VONAGE_PRIVATE_KEY` (the whole private key) and `PUBLIC_URL`.
-
-Order of use when several are set: free bridge, Plivo, Vonage, Twilio, Africa's Talking, LiveKit.
-
-**Option 0: Twilio free trial (no card, 75 free minutes).** Simplest for one demo phone.
-
-1. Sign up at twilio.com/try-twilio **with the Nigerian number you'll call** (it's verified automatically; trial calls only go to verified numbers in your sign-up country).
-2. From the console, copy the **Account SID**, **Auth Token**, and the trial **From** number shown on Voice > Try out Voice.
-3. Give the server `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` and `PUBLIC_URL=https://<your-site>`. Nothing to set in Twilio: each call tells Twilio where to fetch its script.
-
-**Option 1: Africa's Talking (Nigerian number, cheapest).** No agent to deploy: the server does everything.
-
-1. On africastalking.com (Live account, not Sandbox), request a Nigerian voice number: Voice, Phone numbers, request form, category **Test Number**.
+1. On africastalking.com (Live app, not Sandbox), request a Nigerian voice number: Voice, Phone numbers, request form, category **Test Number**, with the letter of request.
 2. Set the number's **callback URL** to `https://<your-site>/api/at/voice`.
-3. Give the server `AT_USERNAME`, `AT_API_KEY` and `AT_VOICE_NUMBER` (e.g. `+234...`). Set `PUBLIC_URL=https://<your-site>` if your host doesn't pass https headers.
-
-The POS uses Twilio if it's set, then Africa's Talking, then LiveKit (below).
-
-**Option 2: LiveKit.** Set up (once):
-
-1. In your [LiveKit Cloud](https://cloud.livekit.io) project, open **Telephony** and add an **outbound SIP trunk** from a provider that can call Nigerian numbers (for example Twilio or Telnyx). Copy its trunk ID (`ST_...`).
-2. Deploy the agent in `caller/`:
-   ```bash
-   cd caller
-   cp .env.example .env          # fill in the LiveKit keys, SIP_OUTBOUND_TRUNK_ID and DEEPGRAM_API_KEY
-   lk agent create --secrets-file .env    # first time
-   lk agent deploy                        # after changes
-   ```
-   To try it on your laptop instead: `pip install -r requirements.txt && python agent.py dev`.
-3. Give the server the same LiveKit project: set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (and `DEMO_PHONE` for Amaka). On Kubernetes, create the `tapnod-calls` secret shown in `k8s/app.yaml`, then `kubectl rollout restart deployment/app`.
+3. Give the server `AT_USERNAME`, `AT_API_KEY`, `AT_VOICE_NUMBER` (e.g. `+234...`) and `PUBLIC_URL`. Remove the `IB_` settings, since Infobip is used first when both are set.
 
 ## Backend
 
@@ -205,13 +177,10 @@ Fingerprint only works over https, so test it on Render or `localhost`, not on a
 | `TOKEN_SECRET` | Key for card tokens. Must match **Card token secret** in the POS settings. Default `tapnod-demo-secret`. |
 | `YARNGPT_API_KEY` | Turns on Nigerian voices. Every call spends YarnGPT credits. |
 | `VAPID_SECRET` | Signs sign-in sessions and keeps notification keys the same across restarts. Render generates it. |
-| `CALL_BRIDGE_KEY` | Free phone calls with your own Android phone and the laptop (used first when set). |
-| `PLIVO_AUTH_ID`, `PLIVO_AUTH_TOKEN`, `PLIVO_FROM` | Phone calls through Plivo. |
-| `VONAGE_APPLICATION_ID`, `VONAGE_PRIVATE_KEY`, `VONAGE_FROM` | Phone calls through Vonage (`VONAGE_FROM` defaults to the trial caller `123456789`). |
-| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | Phone calls through Twilio. |
+| `IB_BASE_URL`, `IB_API_KEY` | Phone calls through Infobip (used first). `IB_FROM` sets the caller number; `IB_SCENARIO_ID` reuses a scenario you made yourself. |
 | `AT_USERNAME`, `AT_API_KEY`, `AT_VOICE_NUMBER` | Phone calls through Africa's Talking. |
-| `PUBLIC_URL` | This site's public https address, for Twilio and Africa's Talking callbacks. |
-| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | Phone calls through LiveKit instead. |
+| `CALL_REQUIRE_PIN` | `on` asks for her 4-digit PIN after she presses 1. |
+| `PUBLIC_URL` | This site's public https address, for the Infobip and Africa's Talking callbacks. |
 | `DEMO_PHONE` | Number the POS rings for Amaka when none is typed, e.g. `08031234567`. |
 | `DEMO_AUTO_LINK` | Demo shortcut for unknown cards: `latest` (default) links them to the most recent sign-up, a customer id links them to that customer, empty gives the real "Card not linked" behaviour. |
 
@@ -332,6 +301,9 @@ server/
   auth.js                Passwords, sessions, fingerprint passkey checks
   push.js                Phone notifications (Web Push, built-in crypto)
   tts.js                 Nigerian voices through YarnGPT
+  calls.js               Phone number helpers
+  ibcalls.js             Phone-call approvals through Infobip
+  atcalls.js             Phone-call approvals through Africa's Talking
   public/landing.html    Landing page
   public/app.html        Customer web app
   public/tapnod.css      Shared design system
