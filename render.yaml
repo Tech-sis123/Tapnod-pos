@@ -24,6 +24,9 @@ services:
       # Nigerian voices. Paste your key from yarngpt.ai in the Render dashboard.
       - key: YARNGPT_API_KEY
         sync: false
+      # Free phone calls with your own Android phone: any secret word. Open /callcenter?key=WORD and /gateway?key=WORD.
+      - key: CALL_BRIDGE_KEY
+        sync: false
       # Phone-call approval through Twilio. Fill these in the Render dashboard.
       - key: TWILIO_ACCOUNT_SID
         sync: false
