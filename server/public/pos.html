@@ -65,9 +65,8 @@
         <div class="h1" style="margin-top:12px">Tap the customer's card</div>
         <p class="body" style="margin-top:10px">Charging <b id="card-amount">₦0</b>. Tap the card on the reader, or pick the customer.</p>
       </div>
-      <div class="big-actions" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="big-actions" style="grid-template-columns:1fr 1fr">
         <button class="btn btn-primary" id="scan">Scan card<small>Hold it up to the webcam</small></button>
-        <button class="btn" id="tapped">Card tapped<small>Customer's Tapnod card</small></button>
         <button class="btn" id="pick">Choose customer<small>Find by name or Tapnod ID</small></button>
       </div>
       <p class="small">A USB card reader works too: it types the card ID and presses Enter.</p>
@@ -205,8 +204,6 @@ for (const k of ['1','2','3','4','5','6','7','8','9','C','0','⌫']) {
 $('charge').onclick = () => { if (naira() > 0) { $('card-amount').textContent = fmt(naira()); show('s-card'); say('Tap the customer\'s card.'); } };
 
 /* ---------- card / customer ---------- */
-// The demo card. The server links an unknown card to the most recent sign-up (DEMO_AUTO_LINK).
-$('tapped').onclick = () => charge({ card_token: 'tapnod-demo-card', card_last4: '4821', card_scheme: 'TAPNOD' });
 $('pick').onclick = async () => {
   show('s-pick'); $('customers').innerHTML = '<div class="row-item">Loading customers…</div>';
   try { customers = (await api('/api/pos/customers')).customers; renderCustomers(); }
@@ -231,7 +228,7 @@ $('cancel-card').onclick = $('cancel-pick').onclick = () => show('s-amount');
 
 /* ---------- webcam card scan (demo) ----------
    Watches the frame and counts a card as "scanned" when something is held still inside it for about
-   a second and a half. It does not read the card number: the card goes to the demo customer, like "Card tapped". */
+   a second and a half. It does not read the card number: the card goes to the demo customer (DEMO_AUTO_LINK). */
 let camStream = null, scanLoop = null;
 async function startScan() {
   show('s-scan');
@@ -239,7 +236,7 @@ async function startScan() {
   try {
     camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360, facingMode: 'user' }, audio: false });
   } catch (e) {
-    $('scan-msg').textContent = 'Camera blocked. Allow the camera in the address bar, or use Card tapped.';
+    $('scan-msg').textContent = 'Camera blocked. Allow the camera in the address bar, or choose the customer.';
     return;
   }
   const video = $('cam');
