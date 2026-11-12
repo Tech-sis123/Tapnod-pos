@@ -121,6 +121,36 @@ For rehearsing without internet. Customers are simulated and the "customer" answ
 
 Phone browsers only allow sound and fingerprint prompts after the person has tapped the page, so the app asks for one tap after it reloads.
 
+## Approval by phone call
+
+For customers with a basic phone, or when the app isn't open. On the POS waiting screen, type her number (or leave it empty to use the one on her account) and press **Call her phone**.
+
+```text
+ POS: Call her phone ──> Tapnod server ──> LiveKit ──> caller agent ──> rings her phone
+                                                         │
+   "Hello Amaka. Bisi Ventures is asking you to pay fifteen thousand naira.
+    To approve, press 1. To decline, press 2."   ->  1  ->  "Type your 4 digit Tapnod PIN"
+                                                         │
+ POS shows Approved <── Tapnod server checks the PIN <───┘
+```
+
+- The PIN is never read back, and she gets 3 tries.
+- If she approves in the app while on the call, the call ends by itself.
+- Each call carries a one-time code from the server, so nothing else can approve through the voice endpoint.
+
+**Set up (once):**
+
+1. In your [LiveKit Cloud](https://cloud.livekit.io) project, open **Telephony** and add an **outbound SIP trunk** from a provider that can call Nigerian numbers (for example Twilio or Telnyx). Copy its trunk ID (`ST_...`).
+2. Deploy the agent in `caller/`:
+   ```bash
+   cd caller
+   cp .env.example .env          # fill in the LiveKit keys, SIP_OUTBOUND_TRUNK_ID and DEEPGRAM_API_KEY
+   lk agent create --secrets-file .env    # first time
+   lk agent deploy                        # after changes
+   ```
+   To try it on your laptop instead: `pip install -r requirements.txt && python agent.py dev`.
+3. Give the server the same LiveKit project: set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (and `DEMO_PHONE` for Amaka). On Kubernetes, create the `tapnod-calls` secret shown in `k8s/app.yaml`, then `kubectl rollout restart deployment/app`.
+
 ## Backend
 
 Plain Node 18+. The only package is `pg`, for Postgres. Web Push, password hashing (scrypt), sessions and passkey checks all use Node's built-in crypto (`push.js`, `auth.js`).
