@@ -27,6 +27,18 @@ services:
       # Free phone calls with your own Android phone: any secret word. Open /callcenter?key=WORD and /gateway?key=WORD.
       - key: CALL_BRIDGE_KEY
         sync: false
+      # Phone calls through Plivo (free $10 trial credit): fill these in the Render dashboard.
+      - key: PLIVO_AUTH_ID
+        sync: false
+      - key: PLIVO_AUTH_TOKEN
+        sync: false
+      - key: PLIVO_FROM
+        sync: false
+      # Or through Vonage (free trial credit): application id and its private key.
+      - key: VONAGE_APPLICATION_ID
+        sync: false
+      - key: VONAGE_PRIVATE_KEY
+        sync: false
       # Phone-call approval through Twilio. Fill these in the Render dashboard.
       - key: TWILIO_ACCOUNT_SID
         sync: false
